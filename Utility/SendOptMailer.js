@@ -13,8 +13,8 @@ const sendotp = async (Email, otp) => {
   const mailoption = {
     from: "jeelgor10@gmail.com",
     to: Email,
-    subject: "Your OTP Code",
-    text: `Your OTP is ${otp}`,
+    subject: `Hello ${Email} this is your Otp`,
+    text: `Your OTP is ${otp} please do not share this to anyone `,
   };
   return transporter.sendMail(mailoption);
 };

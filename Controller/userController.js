@@ -2,6 +2,7 @@ const Users = require("../models/Users");
 const OTP = require("../models/OtpModel");
 const sendotp = require("../Utility/SendOptMailer");
 const bcrypt = require("bcrypt");
+
 exports.RegisterUser = async (req, res) => {
   const { FirstName, LastName, Email, Password, SetPassword } = req.body;
 
@@ -69,10 +70,10 @@ exports.LoginUser = async (req, res) => {
 };
 
 exports.verifyOTP = async (req, res) => {
-  const { Email, otp } = req.body;
+  const { otp } = req.body;
 
   try {
-    const otpDoc = await OTP.findOne({ Email, otp });
+    const otpDoc = await OTP.findOne({ otp });
     if (!otpDoc) {
       return res.status(400).json({ message: "Invalid OTP" });
     }
@@ -87,7 +88,7 @@ exports.verifyOTP = async (req, res) => {
       .json({ message: "OTP verified successfully. Login complete." });
 
     // Optionally, delete the OTP after verification
-    await OTP.deleteOne({ Email, otp });
+    await OTP.deleteOne({ otp });
   } catch (error) {
     res.status(500).json({ message: "Error verifying OTP", error });
   }
