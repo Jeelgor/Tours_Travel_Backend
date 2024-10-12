@@ -10,20 +10,27 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-exports.getImages = async (req, res) => {
-  try {
-    const result = await cloudinary.api.resources({
-      type: "upload",
-      prefix: "TourandTravel/",
-    });
+function StoreURL() {
+  exports.getImages = async (req, res) => {
+    try {
+      const result = await cloudinary.api.resources({
+        type: "upload",
+        prefix: "TourandTravel/",
+      });
 
-    const images = result.resources.map((resource) => ({
-      url: resource.secure_url,
-      public_id: resource.public_id,
-    }));
-    res.json(images);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ msg: "Error Fetching Images From Cloudinary" });
-  }
-};
+      const images = result.resources.map((resource) => ({
+        url: resource.secure_url,
+        public_id: resource.public_id,
+      }));
+      // Save each image URL in MongoDB
+      const savedImages = await imageModel.insertMany(images);
+      console.log(savedImages);
+      res.status(200).json({ msg: "Images saved successfully!", savedImages });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ msg: "Error Fetching Images From Cloudinary" });
+    }
+  };
+}
+
+StoreURL();
