@@ -11,7 +11,7 @@ app.use(express.json());
 app.use(cors());
 // routes
 app.use("/Auth/users", userRoutes);
-
+app.use('/uploads', express.static('uploads')); // This line serves the uploads folder
 app.listen(PORT, () => {
   console.log("Server is Running on Port", PORT);
-});
+}); 
