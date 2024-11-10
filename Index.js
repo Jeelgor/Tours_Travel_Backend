@@ -6,12 +6,20 @@ const userRoutes = require("./routes/UserRoutes");
 // Import database file
 const connectMongoose = require("./config/database");
 connectMongoose();
-
+app.use("/uploads", express.static("uploads"));
 app.use(express.json());
 app.use(cors());
+
 // routes
 app.use("/Auth/users", userRoutes);
-app.use('/uploads', express.static('uploads')); // This line serves the uploads folder
+app.use("/uploads", express.static("uploads"));
+
+const paymentRoutes = require("./routes/Paymentroutes");
+app.use("/api/payment", paymentRoutes);
+
+const bookingRoutes = require("./routes/bookingRoutes");
+app.use("/api", bookingRoutes);
+
 app.listen(PORT, () => {
   console.log("Server is Running on Port", PORT);
-}); 
+});

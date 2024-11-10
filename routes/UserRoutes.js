@@ -1,27 +1,54 @@
 const express = require("express");
 const router = express.Router();
-const upload = require("../multer/config")
+const upload = require("../multer/config");
 
-const { RegisterUser, LoginUser ,verifyOTP} = require("../Controller/userController");
-const { popularDestination } = require("../Controller/popularDestinationController");
+const {
+  RegisterUser,
+  LoginUser,
+  verifyOTP,
+  profile,
+} = require("../Controller/userController");
+const {
+  popularDestination,
+} = require("../Controller/popularDestinationController");
 const { uploadImage } = require("../Cloudinary/work");
-const {getImages} = require("../Cloudinary/FetchImage");
-const { Tourpackages, DeletePackages, getTourPackages } = require("../Controller/TourPackagesController");
+const { getImages } = require("../Cloudinary/FetchImage");
+const {
+  Tourpackages,
+  DeletePackages,
+  getTourPackages,
+} = require("../Controller/TourPackagesController");
 const { FetchImageUrl } = require("../Controller/FetchImageUrl");
-
+const { authMiddleware } = require("../middleware/authMiddleware ");
+const {
+  TourDetails,
+  DeletePackagesDetails,
+  getTourDetailPackages,
+} = require("../Controller/TourDetailController");
 
 router.post("/register", RegisterUser);
 router.post("/loginuser", LoginUser);
-router.post("/verify-Otp",verifyOTP);
-router.post("/popularDestination",upload.single("img"),popularDestination);
-router.post("/upload",upload.single("image"),uploadImage);
-router.post("/Addpackages",upload.array("imageurl",40), Tourpackages);
-router.post("/deleteAllPackages",DeletePackages);
+router.post("/verify-Otp", verifyOTP);
+router.post("/popularDestination", upload.single("img"), popularDestination);
+router.post("/upload", upload.single("image"), uploadImage);
+router.post("/Addpackages", upload.array("imageurl", 40), Tourpackages);
+router.post("/AddpackagesDetails", upload.array("gallery", 40), TourDetails);
+router.delete("/DeletePackagesDetails", DeletePackagesDetails);
+router.post("/deleteAllPackages", DeletePackages);
+
+router.get("/userProfile", authMiddleware, profile);
+router.get("/protected-route", authMiddleware, (req, res) => {
+  res.status(200).json({
+    message: "You have access to this protected route!",
+    user: req.user,
+  });
+});
 // get method
 router.get("/getRegisteruser", RegisterUser);
-router.get("/verify-Otp",verifyOTP);
+router.get("/verify-Otp", verifyOTP);
 router.get("/getLoginuser", LoginUser);
-router.get("/getImages",getImages);
-router.get("/FetchImageURL",FetchImageUrl)
-router.get("/getTourPackages",getTourPackages)
+router.get("/getImages", getImages);
+router.get("/FetchImageURL", FetchImageUrl);
+router.get("/getTourPackages", getTourPackages);
+router.get("/getTourDetailPackages/:pkgId", getTourDetailPackages);
 module.exports = router;
