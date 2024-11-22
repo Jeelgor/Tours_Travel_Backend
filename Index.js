@@ -8,12 +8,17 @@ const connectMongoose = require("./config/database");
 connectMongoose();
 app.use("/uploads", express.static("uploads"));
 app.use(express.json());
-app.use(cors());
+app.use(
+  cors({
+    origin: ["http://localhost:5173"],
+    methods: ["POST", "GET"],
+    credentials: true,
+  })
+);
 
 // routes
 app.use("/Auth/users", userRoutes);
 app.use("/uploads", express.static("uploads"));
-
 const paymentRoutes = require("./routes/Paymentroutes");
 app.use("/api/payment", paymentRoutes);
 

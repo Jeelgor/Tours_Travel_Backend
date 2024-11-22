@@ -6,6 +6,10 @@ const PaymentSchema = new mongoose.Schema({
     ref: "User", // Assuming the payment is related to a user
     required: true,
   },
+  userEmail: {
+    type: String,
+    required: true,
+  },
   paymentIntentId: {
     type: String,
     required: true,

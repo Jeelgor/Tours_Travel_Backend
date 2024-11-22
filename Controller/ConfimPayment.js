@@ -6,6 +6,7 @@ const User = require("../models/Users"); // Assuming you have a User model
 exports.savePayment = async (req, res) => {
   const {
     userId,
+    userEmail,
     paymentIntentId,
     amount,
     packageName,
@@ -23,6 +24,7 @@ exports.savePayment = async (req, res) => {
     // Create a new payment document
     const newPayment = new Payment({
       userId,
+      userEmail,
       paymentIntentId,
       amount,
       packageName,
@@ -33,15 +35,28 @@ exports.savePayment = async (req, res) => {
 
     // Save the payment to the database
     await newPayment.save();
-
-    // Optionally, update user or booking status
-    // Example: Update user's booking status or add payment reference to user
-
     res
       .status(200)
       .json({ message: "Payment saved successfully", payment: newPayment });
   } catch (error) {
     console.error("Error saving payment:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.getPayments = async (req, res) => {
+  try {
+    const Payments = await Payment.find();
+    
+    return res.status(200).json({
+      success: true,
+      data: Payments,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error, unable to fetch bookings",
+    });
   }
 };
