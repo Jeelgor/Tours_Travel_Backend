@@ -67,7 +67,6 @@ exports.getTourDetailPackages = async (req, res) => {
       return res.status(404).json({ msg: "Package not found." });
     }
 
-    // console.log(packageDetail);
     res.status(200).json(packageDetail);
   } catch (error) {
     console.error("Error fetching package details:", error);

@@ -2,7 +2,9 @@ const mongoose = require("mongoose");
 
 const connectMongoose = async () => {
   try {
-    mongoose.connect("mongodb://localhost:27017/TourAndTravel");
+    const DbURI=process.env.MONGO_URI;
+    // mongoose.connect("mongodb://localhost:27017/TourAndTravel");
+    mongoose.connect(DbURI);
     console.log("Database is connected Succesfully");
   } catch (error) {
     console.log("Error in Establish Database Connection");

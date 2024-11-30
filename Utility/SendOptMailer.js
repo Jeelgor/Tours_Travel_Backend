@@ -5,8 +5,7 @@ const sendotp = async (Email, otp) => {
     service: "Gmail",
     auth: {
       user: "jeelgor10@gmail.com",
-      pass: "xtbp algh gyyw ctge",
-      // pass: "J@e#1105%j",
+      pass: process.env.GOOGLE_PASS,
     },
   });
 
