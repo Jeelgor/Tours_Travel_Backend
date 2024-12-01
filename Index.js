@@ -10,11 +10,12 @@ app.use("/uploads", express.static("uploads"));
 app.use(express.json());
 app.use(
   cors({
-    origin: "*",
+    origin: [process.env.ORIGIN],
     methods: ["POST", "GET"],
     credentials: true,
   })
 );
+console.log(process.env.ORIGIN,2131)
 
 // routes
 app.use("/Auth/users", userRoutes);
