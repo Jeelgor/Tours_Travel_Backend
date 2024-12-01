@@ -10,12 +10,12 @@ app.use("/uploads", express.static("uploads"));
 app.use(express.json());
 app.use(
   cors({
-    origin: [process.env.ORIGIN],
+    origin: "https://tours-travel-tau.vercel.app",
     methods: ["POST", "GET"],
     credentials: true,
   })
 );
-console.log(process.env.ORIGIN,2131)
+// console.log(process.env.ORIGIN, 2131);
 
 // routes
 app.use("/Auth/users", userRoutes);
