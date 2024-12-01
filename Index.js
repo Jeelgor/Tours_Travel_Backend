@@ -10,7 +10,7 @@ app.use("/uploads", express.static("uploads"));
 app.use(express.json());
 app.use(
   cors({
-    origin: [process.env.ORIGIN],
+    origin: "*",
     methods: ["POST", "GET"],
     credentials: true,
   })
