@@ -15,6 +15,12 @@ app.use(
     credentials: true,
   })
 );
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', 'https://tours-travel-tau.vercel.app');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  next();
+});
 
 // console.log(process.env.ORIGIN, 2131);
 
