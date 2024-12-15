@@ -18,7 +18,7 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   next();
 });
-
+app.options("*", cors());
 // Routes
 app.use("/Auth/users", userRoutes);
 app.use("/api/payment", paymentRoutes);
