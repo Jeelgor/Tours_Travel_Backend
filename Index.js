@@ -14,14 +14,13 @@ app.use(
   cors({
     origin: "https://tours-travel-nine.vercel.app",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true
   })
 );
-
 // Middleware
 app.use(express.json());
-
+app.options("*", cors());
 // Routes
 app.use("/Auth/users", userRoutes);
 app.use("/api/payment", paymentRoutes);
