@@ -9,22 +9,19 @@ const connectMongoose = require("./config/database");
 // Connect to the database
 connectMongoose();
 
+// CORS configuration
+app.use(
+  cors({
+    origin: "https://tours-travel-nine.vercel.app",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
+  })
+);
+
 // Middleware
 app.use(express.json());
-app.use(cors());
-app.use((req, res, next) => {
-  res.setHeader(
-    "Access-Control-Allow-Origin",
-    "https://tours-travel-nine.vercel.app/"
-  );
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, OPTIONS"
-  );
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  next();
-});
-app.options("https://tours-travel-nine.vercel.app/", cors());
+
 // Routes
 app.use("/Auth/users", userRoutes);
 app.use("/api/payment", paymentRoutes);
