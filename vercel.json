@@ -10,14 +10,29 @@
   "routes": [
     {
       "src": "/Auth/users/(.*)",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization"
+      },
+      "dest": "/index.js"
+    },
+    {
+      "src": "/api/payment/(.*)",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization"
+      },
       "dest": "/index.js"
     },
     {
       "src": "/api/(.*)",
-      "dest": "/index.js"
-    },
-    {
-      "src": "/uploads/(.*)",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization"
+      },
       "dest": "/index.js"
     }
   ]
