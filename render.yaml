@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: tours-backend
+    env: node
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true
