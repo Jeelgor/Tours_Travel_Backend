@@ -3,7 +3,7 @@ services:
     name: tours-backend
     env: node
     buildCommand: cd server && npm install
-    startCommand: cd server && npm start
+    startCommand: cd server && node index.js
     envVars:
       - key: NODE_ENV
         value: production
