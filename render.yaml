@@ -4,7 +4,9 @@ services:
     env: node
     rootDirectory: backend_server
     buildCommand: npm install
-    startCommand: node index.js
+    startCommand: node src/index.js  # Try this if your index.js is in a src folder
+    # OR
+    startCommand: node index.js      # Try this if index.js is in root
     envVars:
       - key: NODE_ENV
         value: production
@@ -12,5 +14,3 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
-    healthCheckPath: /health
-    autoDeploy: true
