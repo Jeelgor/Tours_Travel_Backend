@@ -13,7 +13,7 @@ connectMongoose();
 
 // Middleware
 app.use(cors({
-  origin: ['https://tours-travel-nine.vercel.app', 'http://localhost:5173'],
+  origin: ['https://tours-travel-one.vercel.app/', 'http://localhost:5173'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization']
