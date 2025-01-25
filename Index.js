@@ -5,30 +5,29 @@ const userRoutes = require("./routes/UserRoutes");
 const paymentRoutes = require("./routes/Paymentroutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const connectMongoose = require("./config/database");
+const PORT = process.env.PORT || 3000;
+const path = require('path');
 
 // Connect to the database
 connectMongoose();
 
 // Middleware
+app.use(cors({
+  origin: ['https://tours-travel-nine.vercel.app', 'http://localhost:5173'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
-app.use(cors());
-app.use((req, res, next) => {
-  res.setHeader(
-    "Access-Control-Allow-Origin",
-    "https://tours-travel-nine.vercel.app/"
-  );
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, OPTIONS"
-  );
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  next();
-});
-app.options("https://tours-travel-nine.vercel.app/", cors());
+
 // Routes
 app.use("/Auth/users", userRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api", bookingRoutes);
 
 // Export for Vercel
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.listen(PORT, () => {
+  console.log("Server is Listing on PORT", PORT);
+});
 module.exports = app;
