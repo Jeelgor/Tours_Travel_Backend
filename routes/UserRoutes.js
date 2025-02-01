@@ -25,6 +25,7 @@ const {
   DeletePackagesDetails,
   getTourDetailPackages,
 } = require("../Controller/TourDetailController");
+const { createTourPackage } = require("../Controller/AdminController");
 
 router.post("/register", RegisterUser);
 router.post("/loginuser", LoginUser);
@@ -35,6 +36,8 @@ router.post("/Addpackages", upload.array("imageurl", 40), Tourpackages);
 router.post("/AddpackagesDetails", upload.array("gallery", 40), TourDetails);
 router.delete("/DeletePackagesDetails", DeletePackagesDetails);
 router.post("/deleteAllPackages", DeletePackages);
+
+router.post('/tour-package',upload.array('gallery', 10),createTourPackage); // Multer middleware processes images
 
 router.get("/userProfile", authMiddleware, profile);
 router.get("/protected-route", authMiddleware, (req, res) => {
