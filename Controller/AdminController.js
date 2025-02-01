@@ -11,7 +11,7 @@ cloudinary.config({
 exports.createTourPackage = async (req, res) => {
   try {
     const {
-      packageId,
+      _id,
       overview,
       amenities,
       aboutProperty,
@@ -20,15 +20,20 @@ exports.createTourPackage = async (req, res) => {
       packageType
     } = req.body;
 
+    // Log the received data for debugging
+    console.log('Received data:', {
+      _id,
+      packageType,
+      accessibility
+    });
+
     // Handle gallery images upload
     const gallery = [];
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        // Convert buffer to base64
         const b64 = Buffer.from(file.buffer).toString('base64');
         const dataURI = `data:${file.mimetype};base64,${b64}`;
         
-        // Upload to Cloudinary
         const result = await cloudinary.uploader.upload(dataURI, {
           folder: 'tour-packages',
           resource_type: 'auto',
@@ -38,9 +43,9 @@ exports.createTourPackage = async (req, res) => {
       }
     }
 
-    // Create new tour package
+    // Create new tour package with explicit _id
     const tourPackage = new TourPackageDetail({
-      _id: packageId,
+      _id: _id,
       gallery,
       overview: JSON.parse(overview),
       amenities: JSON.parse(amenities),
@@ -49,6 +54,9 @@ exports.createTourPackage = async (req, res) => {
       commonAreas: JSON.parse(commonAreas),
       packageType
     });
+
+    // Log the tourPackage object before saving
+    console.log('Tour package before save:', tourPackage);
 
     await tourPackage.save();
 

@@ -7,7 +7,6 @@ const bookingRoutes = require("./routes/bookingRoutes");
 const connectMongoose = require("./config/database");
 const PORT = process.env.PORT || 3000;
 const path = require('path');
-const adminRoutes = require('./routes/AdminRoutes');
 
 // Connect to the database
 connectMongoose();
@@ -27,7 +26,6 @@ app.use(express.json());
 app.use("/Auth/users", userRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api", bookingRoutes);
-app.use('/api/admin', adminRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
