@@ -3,36 +3,41 @@ const mongoose = require("mongoose");
 const TourpackagesSchema = new mongoose.Schema({
   _id: {
     type: String,
-    required: true, // Ensure _id is required if needed
+    required: true,
   },
   title: {
     type: String,
-    required: true, // Ensure title is required
+    required: true,
   },
   location: {
     type: String,
-    required: true, // Ensure location is required
+    required: true,
   },
   imageurl: {
     type: String,
-    required: true, // Ensure imageurl is required
+    required: true,
   },
 
   highlights: {
     type: [String],
-    required: true, // Ensure highlights is required
+    required: true,
   },
   rating: {
     type: Number,
-    required: true, // Ensure rating is required
+    required: true,
   },
   price: {
     type: String,
-    required: true, // Ensure price is required
+    required: true,
   },
   currency: {
     type: String,
-    required: true, // Ensure currency is required
+    required: true,
+  },
+  Seatleft: {
+    type: Number,
+    required: true,
+    min:0
   },
 });
 

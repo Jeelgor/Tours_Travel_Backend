@@ -1,9 +1,23 @@
 const Booking = require("../models/Booking"); // Assuming the Booking model is in the "models" folder
 const mongoose = require("mongoose");
+const TourPackages = require("../models/TourPackages");
 
 // Controller to handle booking creation
 exports.createBooking = async (req, res) => {
   try {
+    const { packageId, userId } = req.body;
+    const tour = await TourPackages.findById(packageId);
+    if (!tour) return res.status(404).json({ message: "Tour not found" });
+    if (tour.seatsLeft <= 0)
+      return res.status(400).json({ message: "No seats available" });
+
+    // Decrease seat count atomically
+    const UpdateSeat = await TourPackages.findByIdAndUpdate(
+      packageId,
+      { $inc: { Seatleft: -1 } },
+      { new: true }
+    );
+
     // Check if packageId is provided and is a valid string
     if (!req.body.packageId || typeof req.body.packageId !== "string") {
       return res.status(400).json({
@@ -30,6 +44,7 @@ exports.createBooking = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Booking created successfully",
+      Seatleft: UpdateSeat.Seatleft,
     });
   } catch (error) {
     // Log the error for debugging
