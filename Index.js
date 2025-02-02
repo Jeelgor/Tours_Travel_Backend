@@ -34,7 +34,7 @@ app.use((err, req, res, next) => {
 });
 
 // Export for Vercel
-// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.listen(PORT, () => {
   console.log("Server is Listening on PORT", PORT);
 });
