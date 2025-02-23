@@ -5,58 +5,74 @@ const TourPackages = require("../models/TourPackages");
 // Controller to handle booking creation
 exports.createBooking = async (req, res) => {
   try {
-    const { packageId, userId } = req.body;
+    const { 
+      packageId, 
+      userId,
+      name,
+      email,
+      numberOfTravelers,
+      specialRequests,
+      fromDate,
+      toDate,
+      address,     // New field
+      mobileNumber, // New field
+      pincode      // New field
+    } = req.body;
+    
+    // Validate userId
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId is required"
+      });
+    }
+
     const tour = await TourPackages.findById(packageId);
     if (!tour) return res.status(404).json({ message: "Tour not found" });
     if (tour.seatsLeft <= 0)
       return res.status(400).json({ message: "No seats available" });
 
-    // Decrease seat count atomically
+    // Create a new booking with the data from the request body
+    const booking = new Booking({
+      userId,
+      name,
+      email,
+      numberOfTravelers,
+      specialRequests,
+      packageId,
+      fromDate,
+      toDate,
+      address,      // New field
+      mobileNumber, // New field
+      pincode,      // New field
+    });
+
+    // Save the booking to the database
+    await booking.save();
+
+    // Update seats
     const UpdateSeat = await TourPackages.findByIdAndUpdate(
       packageId,
       { $inc: { Seatleft: -1 } },
       { new: true }
     );
 
-    // Check if packageId is provided and is a valid string
-    if (!req.body.packageId || typeof req.body.packageId !== "string") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid or missing package ID",
-      });
-    }
-
-    // Create a new booking with the data from the request body
-    const booking = new Booking({
-      name: req.body.name,
-      email: req.body.email,
-      numberOfTravelers: req.body.numberOfTravelers,
-      specialRequests: req.body.specialRequests,
-      packageId: req.body.packageId, // Using the custom string packageId
-      fromDate: req.body.fromDate,
-      toDate: req.body.toDate,
-    });
-
-    // Save the booking to the database
-    await booking.save();
-
-    // Respond with success
     res.status(200).json({
       success: true,
       message: "Booking created successfully",
       Seatleft: UpdateSeat.Seatleft,
+      booking: booking // Return the booking object
     });
   } catch (error) {
-    // Log the error for debugging
     console.error("Error creating booking:", error);
-
-    // Send error response
     res.status(500).json({
       success: false,
       message: "Server error, unable to create booking",
+      error: error.message
     });
   }
 };
+
 // Get all bookings
 exports.getBookings = async (req, res) => {
   try {

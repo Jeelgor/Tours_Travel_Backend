@@ -11,6 +11,14 @@ const BookingSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  address: { type: String, required: true },
+  mobileNumber: { type: String, required: true },
+  pincode: { type: String, required: true },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Users',
+    required: true
+  }
 });
 
 module.exports = mongoose.model("Booking", BookingSchema);
