@@ -23,6 +23,18 @@ const UsersSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  Address: {
+    type: String,
+    required: false
+  },
+  MobileNumber: {
+    type: String,
+    required: false
+  },
+  Pincode: {
+    type: String,
+    required: false
+  }
 });
 
 // Pre-save middleware to hash the password and setpassword
