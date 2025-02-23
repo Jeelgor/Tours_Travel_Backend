@@ -6,10 +6,20 @@ const {
   authMiddleware,
   genrateToken,
 } = require("../middleware/authMiddleware ");
+const jwt = require("jsonwebtoken");
 
 // Register User
 exports.RegisterUser = async (req, res) => {
-  const { FirstName, LastName, Email, Password, SetPassword } = req.body;
+  const {
+    FirstName,
+    LastName,
+    Email,
+    Password,
+    SetPassword,
+    Pincode,
+    MobileNumber,
+    Address,
+  } = req.body;
 
   try {
     // Check if user already exists
@@ -29,6 +39,9 @@ exports.RegisterUser = async (req, res) => {
       Email,
       Password: hashedPassword,
       SetPassword,
+      Pincode,
+      MobileNumber,
+      Address,
     });
 
     const response = await user.save();
@@ -147,5 +160,59 @@ exports.profile = async (req, res) => {
     res.json(user);
   } catch (error) {
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Update Profile
+exports.updateUserProfile = async (req, res) => {
+  try {
+    // Since authMiddleware is already adding user to req object
+    // we can directly use req.user instead of verifying token again
+    const userId = req.user.id;
+
+    const { FirstName, LastName, Address, MobileNumber, Pincode } = req.body;
+
+    // Find and update user
+    const updatedUser = await Users.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          ...(FirstName && { FirstName }),
+          ...(LastName && { LastName }),
+          ...(Address && { Address }),
+          ...(MobileNumber && { MobileNumber }),
+          ...(Pincode && { Pincode })
+        }
+      },
+      { new: true }
+    ).select("-Password -SetPassword");
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user: {
+        FirstName: updatedUser.FirstName,
+        LastName: updatedUser.LastName,
+        Email: updatedUser.Email,
+        Address: updatedUser.Address,
+        MobileNumber: updatedUser.MobileNumber,
+        Pincode: updatedUser.Pincode
+      }
+    });
+
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
   }
 };

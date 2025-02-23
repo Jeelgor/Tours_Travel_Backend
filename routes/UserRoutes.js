@@ -7,6 +7,7 @@ const {
   LoginUser,
   verifyOTP,
   profile,
+  updateUserProfile,
 } = require("../Controller/userController");
 const {
   popularDestination,
@@ -54,4 +55,5 @@ router.get("/getImages", getImages);
 router.get("/FetchImageURL", FetchImageUrl);
 router.get("/getTourPackages", getTourPackages);
 router.get("/getTourDetailPackages/:pkgId", getTourDetailPackages);
+router.put("/updateProfile", authMiddleware, updateUserProfile);
 module.exports = router;
