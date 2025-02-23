@@ -6,20 +6,10 @@ const {
   authMiddleware,
   genrateToken,
 } = require("../middleware/authMiddleware ");
-const jwt = require('jsonwebtoken');
 
 // Register User
 exports.RegisterUser = async (req, res) => {
-  const { 
-    FirstName, 
-    LastName, 
-    Email, 
-    Password, 
-    SetPassword,
-    Address,
-    MobileNumber,
-    Pincode 
-  } = req.body;
+  const { FirstName, LastName, Email, Password, SetPassword } = req.body;
 
   try {
     // Check if user already exists
@@ -32,16 +22,13 @@ exports.RegisterUser = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(Password, salt);
 
-    // Create new user with hashed password and new fields
+    // Create new user with hashed password
     user = new Users({
       FirstName,
       LastName,
       Email,
       Password: hashedPassword,
       SetPassword,
-      Address,
-      MobileNumber,
-      Pincode
     });
 
     const response = await user.save();
@@ -51,9 +38,11 @@ exports.RegisterUser = async (req, res) => {
       id: response.id,
       Email: response.Email,
     };
-    
+    console.log("Payload :", JSON.stringify(payload));
     const token = genrateToken(payload);
+    console.log("Token is :", token);
 
+    // Send response including user data and token
     res.status(200).json({
       msg: "User Registered Successfully",
       response,
@@ -75,35 +64,44 @@ exports.LoginUser = async (req, res) => {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    const isMatch = await bcrypt.compare(Password, user.SetPassword);
+    // Ensure you're comparing the Password with the correct field
+    const isMatch = await bcrypt.compare(Password, user.SetPassword); // Assuming 'Password' is the field name
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
     const payload = {
-      id: user._id,
+      id: user._id, // Ensure you're using the correct field for the user ID
       Email: user.Email,
     };
 
-    const token = genrateToken(payload);
+    console.log("Payload:", JSON.stringify(payload)); // Log the payload here
 
-    // Send token in response
+    const token = genrateToken(payload);
+    console.log("Token is:", token); // Log the token
+
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000);
+    await sendotp(Email, otp);
+
+    // Save OTP in the database
+    const otpDoc = new OTP({
+      Email: Email,
+      otp: otp,
+      expiresAt: Date.now() + 300000, // Expires in 5 minutes
+    });
+    await otpDoc.save();
+
+    // Include the token in the response
     res.status(200).json({
-      success: true,
-      message: "Login successful",
-      token: token,
-      user: {
-        id: user._id,
-        email: user.Email
-      }
+      message: "OTP sent to your email. Please verify OTP to complete login.",
+      token, // Send the token in the response
     });
   } catch (error) {
-    console.error("Error logging in user:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Error logging in user", 
-      error: error.message 
-    });
+    console.error("Error logging in user:", error); // Log the error
+    res
+      .status(500)
+      .json({ message: "Error logging in user", error: error.message });
   }
 };
 
@@ -142,130 +140,12 @@ exports.verifyOTP = async (req, res) => {
 // Profile
 exports.profile = async (req, res) => {
   try {
-    // Get token from header
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "No token provided"
-      });
-    }
-
-    // Verify token
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRATE_KEY);
-    } catch (err) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid token"
-      });
-    }
-
-    // Check if decoded.id exists
-    if (!decoded.id) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid token payload"
-      });
-    }
-
-    const user = await Users.findById(decoded.id)
-      .select("-Password -SetPassword");
-    
+    const user = await Users.findById(req.user.id).select("-password"); // Exclude password
     if (!user) {
-      return res.status(404).json({ 
-        success: false,
-        message: "User not found" 
-      });
+      return res.status(404).json({ message: "User not found" });
     }
-
-    res.status(200).json({
-      success: true,
-      user: {
-        FirstName: user.FirstName,
-        LastName: user.LastName,
-        Email: user.Email,
-        Address: user.Address,
-        MobileNumber: user.MobileNumber,
-        Pincode: user.Pincode
-      }
-    });
+    res.json(user);
   } catch (error) {
-    console.error('Profile error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: "Server error",
-      error: error.message 
-    });
-  }
-};
-
-// Update Profile
-exports.updateUserProfile = async (req, res) => {
-  try {
-    // Get token from header
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "No token, authorization denied"
-      });
-    }
-
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRATE_KEY);
-    const userId = decoded.id;
-
-    const { FirstName, LastName, Address, MobileNumber, Pincode } = req.body;
-
-    // Validate the input
-    if (!FirstName && !LastName && !Address && !MobileNumber && !Pincode) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide at least one field to update"
-      });
-    }
-
-    // Build update object with only provided fields
-    const updateFields = {};
-    if (FirstName) updateFields.FirstName = FirstName;
-    if (LastName) updateFields.LastName = LastName;
-    if (Address) updateFields.Address = Address;
-    if (MobileNumber) updateFields.MobileNumber = MobileNumber;
-    if (Pincode) updateFields.Pincode = Pincode;
-
-    const updatedUser = await Users.findByIdAndUpdate(
-      userId,
-      { $set: updateFields },
-      { new: true }
-    ).select("-Password -SetPassword");
-
-    if (!updatedUser) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found"
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Profile updated successfully",
-      user: {
-        FirstName: updatedUser.FirstName,
-        LastName: updatedUser.LastName,
-        Email: updatedUser.Email,
-        Address: updatedUser.Address,
-        MobileNumber: updatedUser.MobileNumber,
-        Pincode: updatedUser.Pincode
-      }
-    });
-  } catch (error) {
-    console.error("Error updating profile:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message
-    });
+    res.status(500).json({ message: "Server error" });
   }
 };
