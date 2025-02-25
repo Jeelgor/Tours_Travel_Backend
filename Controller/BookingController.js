@@ -1,57 +1,78 @@
 const Booking = require("../models/Booking"); // Assuming the Booking model is in the "models" folder
 const mongoose = require("mongoose");
 const TourPackages = require("../models/TourPackages");
+const User = require("../models/Users");
 
 // Controller to handle booking creation
 exports.createBooking = async (req, res) => {
   try {
-    const { 
-      packageId, 
-      userId,
+    const {
+      packageId,
       name,
       email,
       numberOfTravelers,
       specialRequests,
       fromDate,
       toDate,
-      address,     // New field
-      mobileNumber, // New field
-      pincode      // New field
+      address,
+      mobileNumber,
+      pincode,
     } = req.body;
-    
-    // Validate userId
+
+    // Get userId from authenticated user
+    const userId = req.user.id; // Assuming you're using authMiddleware
+
     if (!userId) {
-      return res.status(400).json({
+      return res.status(400).json({ 
         success: false,
-        message: "userId is required"
+        message: "User authentication required" 
       });
     }
 
-    const tour = await TourPackages.findById(packageId);
-    if (!tour) return res.status(404).json({ message: "Tour not found" });
-    if (tour.seatsLeft <= 0)
-      return res.status(400).json({ message: "No seats available" });
+    // Validate user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: "User not found" 
+      });
+    }
 
-    // Create a new booking with the data from the request body
+    // Validate tour package
+    const tour = await TourPackages.findById(packageId);
+    if (!tour) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Tour not found" 
+      });
+    }
+
+    if (tour.Seatleft <= 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: "No seats available" 
+      });
+    }
+
+    // Create booking
     const booking = new Booking({
       userId,
+      packageId,
       name,
       email,
       numberOfTravelers,
       specialRequests,
-      packageId,
       fromDate,
       toDate,
-      address,      // New field
-      mobileNumber, // New field
-      pincode,      // New field
+      address,
+      mobileNumber,
+      pincode,
     });
 
-    // Save the booking to the database
     await booking.save();
 
     // Update seats
-    const UpdateSeat = await TourPackages.findByIdAndUpdate(
+    const updatedTour = await TourPackages.findByIdAndUpdate(
       packageId,
       { $inc: { Seatleft: -1 } },
       { new: true }
@@ -60,9 +81,10 @@ exports.createBooking = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Booking created successfully",
-      Seatleft: UpdateSeat.Seatleft,
-      booking: booking // Return the booking object
+      seatsLeft: updatedTour.Seatleft,
+      booking
     });
+
   } catch (error) {
     console.error("Error creating booking:", error);
     res.status(500).json({

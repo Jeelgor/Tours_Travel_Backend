@@ -16,9 +16,9 @@ const BookingSchema = new mongoose.Schema({
   pincode: { type: String, required: true },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Users',
-    required: true
-  }
+    ref: "User",
+    required: true,
+  },
 });
 
 module.exports = mongoose.model("Booking", BookingSchema);
