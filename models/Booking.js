@@ -19,6 +19,7 @@ const BookingSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
+  status: { type: String, required: true },
 });
 
 module.exports = mongoose.model("Booking", BookingSchema);

@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
+const http = require("http");
 const userRoutes = require("./routes/UserRoutes");
 const paymentRoutes = require("./routes/Paymentroutes");
 const bookingRoutes = require("./routes/bookingRoutes");
@@ -8,7 +9,9 @@ const AdminRoutes = require("./routes/AdminRoutes");
 const connectMongoose = require("./config/database");
 const PORT = process.env.PORT || 3000;
 const path = require("path");
-
+const server = http.createServer(app);
+const { initializeSocket } = require("./socket/socket"); // Import socket setup
+const io = initializeSocket(server); // Initialize Socket.io
 // Connect to the database
 connectMongoose();
 
@@ -34,7 +37,7 @@ app.use("/Auth/users", userRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api", bookingRoutes);
 // app.use("/process", AdminRoutes);
-app.use("/api/tours",AdminRoutes)
+app.use("/api/tours", AdminRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -30,6 +30,10 @@ const PaymentSchema = new mongoose.Schema({
     type: String, // Payment method (e.g., "card")
     required: true,
   },
+  bookingId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+  },
   paymentDate: {
     type: Date,
     default: Date.now,
