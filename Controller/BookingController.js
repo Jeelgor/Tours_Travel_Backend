@@ -2,6 +2,10 @@ const Booking = require("../models/Booking"); // Assuming the Booking model is i
 const mongoose = require("mongoose");
 const TourPackages = require("../models/TourPackages");
 const User = require("../models/Users");
+const { Tourpackages } = require("../models/TourPackages");
+const stripe = require("stripe")(process.env.STRIP_SECRET_KEY);
+const io = require("../socket/socket");
+const Payment = require("../models/PaymentModel");
 
 // Controller to handle booking creation
 exports.createBooking = async (req, res) => {
@@ -20,42 +24,35 @@ exports.createBooking = async (req, res) => {
     } = req.body;
 
     // Get userId from authenticated user
-    const userId = req.user.id; // Assuming you're using authMiddleware
+    const userId = req.user?.id; // Ensure user exists before accessing id
 
     if (!userId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "User authentication required" 
+        message: "User authentication required",
       });
     }
 
     // Validate user exists
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "User not found" 
+        message: "User not found",
       });
     }
 
     // Validate tour package
     const tour = await TourPackages.findById(packageId);
     if (!tour) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Tour not found" 
-      });
-    }
-
-    if (tour.Seatleft <= 0) {
-      return res.status(400).json({ 
-        success: false,
-        message: "No seats available" 
+        message: "Tour not found",
       });
     }
 
     // Create booking
-    const booking = new Booking({
+    const newBooking = new Booking({
       userId,
       packageId,
       name,
@@ -67,31 +64,68 @@ exports.createBooking = async (req, res) => {
       address,
       mobileNumber,
       pincode,
+      status: "pending",
     });
 
-    await booking.save();
+    await newBooking.save();
 
-    // Update seats
+    // Update available seats
     const updatedTour = await TourPackages.findByIdAndUpdate(
       packageId,
-      { $inc: { Seatleft: -1 } },
+      { $inc: { Seatleft: -numberOfTravelers } },
       { new: true }
     );
 
-    res.status(200).json({
+    return res.status(201).json({
       success: true,
-      message: "Booking created successfully",
+      message: "Booking initiated. Proceed with payment.",
+      bookingId: newBooking._id,
       seatsLeft: updatedTour.Seatleft,
-      booking
     });
 
   } catch (error) {
     console.error("Error creating booking:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error, unable to create booking",
-      error: error.message
+    
+    if (!res.headersSent) { // Prevent multiple responses
+      return res.status(500).json({
+        success: false,
+        message: "Server error, unable to create booking",
+        error: error.message,
+      });
+    }
+  }
+};
+
+
+// confirm-booking
+exports.ConfirmBooking = async (req, res) => {
+  try {
+    const { bookingId, paymentIntentId } = req.body;
+
+    // Verify the payment with Stripe
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    if (paymentIntent.status !== "succeeded") {
+      return res.status(400).json({ message: "Payment not confirmed" });
+    }
+
+    // Update the booking status
+    const booking = await Booking.findByIdAndUpdate(
+      bookingId,
+      { status: "confirmed", paymentIntentId },
+      { new: true }
+    );
+
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    res.status(200).json({
+      message: "Booking confirmed!",
+      booking,
     });
+  } catch (error) {
+    console.error("Confirmation error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -223,5 +257,55 @@ exports.deleteBooking = async (req, res) => {
       success: false,
       message: "Server error, unable to delete booking",
     });
+  }
+};
+
+// Cancel a booking with refund
+exports.CancleBooking = async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+
+    // Find the booking
+    const booking = await Booking.findById(bookingId);
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+    // Find the corresponding payment record
+    const payment = await Payment.findOne({ bookingId: booking._id });
+    if (!payment || !payment.paymentIntentId) {
+      return res
+        .status(400)
+        .json({ message: "Payment details not found for this booking" });
+    }
+
+    // Process refund via Stripe
+    const refund = await stripe.refunds.create({
+      payment_intent: payment.paymentIntentId,
+    });
+
+    if (refund.status !== "succeeded") {
+      return res.status(400).json({ message: "Refund failed" });
+    }
+
+    // Restore seat count
+    const tour = await TourPackage.findById(booking.tourId);
+    if (tour) {
+      tour.availableSeats += 1;
+      await tour.save();
+      io.emit("seat-updated", {
+        tourId: tour._id,
+        availableSeats: tour.availableSeats,
+      });
+    }
+
+    // Remove booking and payment record
+    await Booking.findByIdAndDelete(bookingId);
+    await Payment.findByIdAndDelete(payment._id);
+
+    res
+      .status(200)
+      .json({ message: "Booking cancelled and refunded successfully." });
+  } catch (error) {
+    console.error("Cancellation error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };

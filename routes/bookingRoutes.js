@@ -18,4 +18,9 @@ router.put("/booking/:bookingId", BookingController.updateBooking);
 // Delete a booking by ID
 router.delete("/booking/:bookingId", BookingController.deleteBooking);
 
+// 
+router.post("/CancleBooking",BookingController.CancleBooking)
+
+router.post("/confirm-booking",BookingController.ConfirmBooking)
+
 module.exports = router;
