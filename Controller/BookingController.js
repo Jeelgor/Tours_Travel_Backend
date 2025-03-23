@@ -1,16 +1,17 @@
-const Booking = require("../models/Booking"); // Assuming the Booking model is in the "models" folder
+const Booking = require("../models/Booking");
 const mongoose = require("mongoose");
 const TourPackages = require("../models/TourPackages");
 const User = require("../models/Users");
 const { Tourpackages } = require("../models/TourPackages");
 const stripe = require("stripe")(process.env.STRIP_SECRET_KEY);
-const io = require("../socket/socket");
+const { getIo } = require("../socket/socket");
 const Payment = require("../models/PaymentModel");
 
 // Controller to handle booking creation
 exports.createBooking = async (req, res) => {
   try {
     const {
+      _id,
       packageId,
       name,
       email,
@@ -69,24 +70,22 @@ exports.createBooking = async (req, res) => {
 
     await newBooking.save();
 
-    // Update available seats
-    const updatedTour = await TourPackages.findByIdAndUpdate(
-      packageId,
-      { $inc: { Seatleft: -numberOfTravelers } },
-      { new: true }
-    );
+    tour.Seatleft -= numberOfTravelers;
+    await tour.save();
 
-    return res.status(201).json({
+    getIo().emit("updateSeats", { _id, Seatleft: tour.Seatleft });
+
+    res.status(201).json({
       success: true,
       message: "Booking initiated. Proceed with payment.",
       bookingId: newBooking._id,
-      seatsLeft: updatedTour.Seatleft,
+      Seatleft: tour.Seatleft,
     });
-
   } catch (error) {
     console.error("Error creating booking:", error);
-    
-    if (!res.headersSent) { // Prevent multiple responses
+
+    if (!res.headersSent) {
+      // Prevent multiple responses
       return res.status(500).json({
         success: false,
         message: "Server error, unable to create booking",
@@ -96,6 +95,49 @@ exports.createBooking = async (req, res) => {
   }
 };
 
+const cancelExpiredBookings = async () => {
+  const now = new Date();
+
+  try {
+    const expiredBookings = await Booking.find({
+      status: "pending",
+      createdAt: { $lte: new Date(Date.now() - 10 * 60 * 1000) },
+    });
+
+    if (expiredBookings.length === 0) {
+      console.log("No expired bookings found.");
+      return;
+    }
+
+    console.log("Expired Bookings:", expiredBookings.length);
+
+    for (const booking of expiredBookings) {
+      const tour = await TourPackages.findById(booking.tourId);
+
+      if (tour) {
+        console.log("Booking data:", booking);
+        console.log("Before restoration, Tour Seats:", tour.Seatleft);
+
+        tour.Seatleft += booking.numberOfTravelers;
+        await tour.save();
+
+        console.log("After restoration, Tour Seats:", tour.Seatleft);
+      }
+
+      booking.status = "cancelled";
+      await booking.deleteOne();
+
+      getIo().emit("updateSeats", {
+        _id: booking._id,
+        Seatleft: tour ? tour.Seatleft : "Unknown",
+      });
+    }
+
+    console.log("Expired bookings canceled and seats restored.");
+  } catch (error) {
+    console.error("Error canceling expired bookings:", error);
+  }
+};
 
 // confirm-booking
 exports.ConfirmBooking = async (req, res) => {
@@ -128,6 +170,9 @@ exports.ConfirmBooking = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// Run every minute
+setInterval(cancelExpiredBookings, 60 * 1000);
 
 // Get all bookings
 exports.getBookings = async (req, res) => {
