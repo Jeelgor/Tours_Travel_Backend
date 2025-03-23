@@ -9,9 +9,9 @@ const AdminRoutes = require("./routes/AdminRoutes");
 const connectMongoose = require("./config/database");
 const PORT = process.env.PORT || 3000;
 const path = require("path");
+const { initializeSocket } = require("./socket/socket"); 
 const server = http.createServer(app);
-const { initializeSocket } = require("./socket/socket"); // Import socket setup
-const io = initializeSocket(server); // Initialize Socket.io
+const io = initializeSocket(server); // Initialize WebSocket
 // Connect to the database
 connectMongoose();
 
@@ -22,6 +22,7 @@ app.use(
       "https://tours-travel-one.vercel.app",
       "http://localhost:5173",
       "https://tours-travel-backend-five.vercel.app",
+      "http://localhost:3000"
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,

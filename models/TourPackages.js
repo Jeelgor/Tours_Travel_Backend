@@ -37,7 +37,8 @@ const TourpackagesSchema = new mongoose.Schema({
   Seatleft: {
     type: Number,
     required: true,
-    min:0
+    min: 0,
+    default: 10,
   },
 });
 

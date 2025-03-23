@@ -33,5 +33,5 @@ exports.authMiddleware = async (req, res, next) => {
 
 // Function to generate JWT
 exports.genrateToken = (userData) => {
-  return jwt.sign(userData, process.env.JWT_SECRET, { expiresIn: "30d" }); // Use a readable format for expiration
+  return jwt.sign(userData, process.env.JWT_SECRET, { expiresIn: "1d" });
 };

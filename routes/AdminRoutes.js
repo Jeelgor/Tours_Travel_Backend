@@ -9,6 +9,8 @@ const {
   deleteAdminTour,
   getTourDetails,
 } = require("../Controller/AdminController/TourManagement");
+const { updateTourPackage } = require("../Controller/AdminController");
+const upload = require("../multer/config");
 
 // Admin Login
 // router.post("/admin/login", LoginUser);
@@ -20,5 +22,6 @@ router.post("/admin/tours", createAdminTour);
 router.put("/admin/Updatetours/:id", updateAdminTour);
 router.delete("/admin/tours/:id", deleteAdminTour);
 router.get("/admin/tourdetails/:pkgId", getTourDetails);
+router.post("/admin/updatetourdetails/:pkgId",upload.array('gallery', 10), updateTourPackage);
 
 module.exports = router;
