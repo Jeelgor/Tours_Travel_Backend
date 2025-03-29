@@ -22,5 +22,6 @@ router.delete("/booking/:bookingId", BookingController.deleteBooking);
 router.post("/CancleBooking",BookingController.CancleBooking)
 
 router.post("/confirm-booking",BookingController.ConfirmBooking)
+router.post("/api/cancel-expired-bookings",BookingController.cancelExpiredBookings)
 
 module.exports = router;

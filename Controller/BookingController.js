@@ -95,45 +95,64 @@ exports.createBooking = async (req, res) => {
   }
 };
 
-const cancelExpiredBookings = async () => {
+exports.cancelExpiredBookings = async () => {
   const now = new Date();
 
   try {
     const expiredBookings = await Booking.find({
-      status: "pending",
-      createdAt: { $lte: new Date(Date.now() - 10 * 60 * 1000) },
+      status: { $in: ["pending", "cancelled"] },
+      createdAt: { $lte: new Date(Date.now() - 2 * 60 * 1000) },
     });
 
     if (expiredBookings.length === 0) {
       console.log("No expired bookings found.");
       return;
     }
-
     console.log("Expired Bookings:", expiredBookings.length);
+    console.log(
+      "Expired Booking IDs:",
+      expiredBookings.map((b) => b.packageId)
+    );
 
-    for (const booking of expiredBookings) {
-      const tour = await TourPackages.findById(booking.tourId);
+    await Promise.all(
+      expiredBookings.map(async (booking) => {
+        console.log("Processing Booking:", booking);
 
-      if (tour) {
-        console.log("Booking data:", booking);
+        if (!booking.packageId) {
+          console.log(
+            `⛔ ERROR: packageId is missing for booking ${booking.packageId}`
+          );
+          return;
+        }
+
+        // ✅ Fetch the tour package using the correct packageId
+        const tour = await TourPackages.findById(booking.packageId);
+
+        if (!tour) {
+          console.log(
+            `⛔ ERROR: Tour package not found for packageId ${booking.packageId}`
+          );
+          return;
+        }
+
         console.log("Before restoration, Tour Seats:", tour.Seatleft);
-
         tour.Seatleft += booking.numberOfTravelers;
         await tour.save();
-
         console.log("After restoration, Tour Seats:", tour.Seatleft);
-      }
 
-      booking.status = "cancelled";
-      await booking.deleteOne();
+        getIo().emit("updateSeats", {
+          _id: booking.packageId,
+          Seatleft: tour.Seatleft,
+        });
 
-      getIo().emit("updateSeats", {
-        _id: booking._id,
-        Seatleft: tour ? tour.Seatleft : "Unknown",
-      });
-    }
+        // ✅ Delete the booking properly
+        await Booking.deleteOne({ packageId: booking.packageId });
 
-    console.log("Expired bookings canceled and seats restored.");
+        console.log(`✅ Booking ${booking._id} canceled and seats restored.`);
+      })
+    );
+
+    console.log("✅ All expired bookings processed successfully.");
   } catch (error) {
     console.error("Error canceling expired bookings:", error);
   }
@@ -170,10 +189,6 @@ exports.ConfirmBooking = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
-// Run every minute
-setInterval(cancelExpiredBookings, 60 * 1000);
-
 // Get all bookings
 exports.getBookings = async (req, res) => {
   try {
