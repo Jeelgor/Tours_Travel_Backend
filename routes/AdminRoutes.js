@@ -22,6 +22,5 @@ router.post("/admin/tours", createAdminTour);
 router.put("/admin/Updatetours/:id", updateAdminTour);
 router.delete("/admin/tours/:id", deleteAdminTour);
 router.get("/admin/tourdetails/:pkgId", getTourDetails);
-router.post("/admin/updatetourdetails/:pkgId",upload.array('gallery', 10), updateTourPackage);
 
 module.exports = router;

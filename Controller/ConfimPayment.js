@@ -2,6 +2,7 @@ const express = require("express");
 const Payment = require("../models/PaymentModel"); // Assuming you have a Payment model
 const User = require("../models/Users"); // Assuming you have a User model
 const Booking = require("../models/Booking");
+const { sendBookingConfirmation } = require("../Utility/emailService");
 
 // POST request to save payment details
 exports.savePayment = async (req, res) => {
@@ -44,15 +45,23 @@ exports.savePayment = async (req, res) => {
 
     await newPayment.save();
 
-    // ✅ 4. Update booking status to "confirmed"
     booking.status = "confirmed";
     await booking.save();
-
-    res.status(200).json({ 
-      message: "Payment saved successfully, Booking Confirmed!", 
-      payment: newPayment 
+    // Send confirmation email
+    await sendBookingConfirmation(userEmail, {
+      _id: booking._id,
+      name: booking.name,
+      email: userEmail,
+      packageId: booking.packageId,
+      fromDate: booking.fromDate,
+      toDate: booking.toDate,
+      status: booking.status,
     });
 
+    res.status(200).json({
+      message: "Payment saved successfully, Booking Confirmed!",
+      payment: newPayment,
+    });
   } catch (error) {
     console.error("Error saving payment:", error);
     res.status(500).json({ message: "Server error" });

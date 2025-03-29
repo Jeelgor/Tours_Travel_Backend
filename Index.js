@@ -14,6 +14,7 @@ const server = http.createServer(app);
 const io = initializeSocket(server); // Initialize WebSocket
 // Connect to the database
 connectMongoose();
+require('./Utility/cronJobs')
 
 // Middleware
 app.use(
