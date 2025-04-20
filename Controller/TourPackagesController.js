@@ -61,3 +61,25 @@ exports.getTourPackages = async (req, res) => {
     console.log(error);
   }
 };
+exports.getTourPackagesByid = async (req, res) => {
+  try {
+    const { pkgId } = req.query;
+    console.log(pkgId, 34567);
+    if (pkgId) {
+      const package = await TourPackages.findOne({ _id: pkgId });
+
+      if (!package) {
+        return res.status(404).json({ message: "Tour package not found" });
+      }
+
+      return res.status(200).json(package);
+    }
+
+    // If no pkgId is provided, return all packages
+    const allPackages = await TourPackages.find();
+    res.status(200).json(allPackages);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
