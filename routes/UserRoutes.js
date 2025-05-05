@@ -37,7 +37,7 @@ router.post("/Addpackages", upload.array("imageurl", 40), Tourpackages);
 router.post("/AddpackagesDetails", upload.array("gallery", 40), TourDetails);
 router.delete("/DeletePackagesDetails", DeletePackagesDetails);
 router.post("/deleteAllPackages", DeletePackages);
-router.put("/admin/updatetourdetails",upload.array('gallery', 10), updateTourPackage);
+router.put("/admin/updatetourdetails",upload.single('imageurl', 10), updateTourPackage);
 
 router.post('/tour-package',upload.array('gallery', 10),createTourPackage); // Multer middleware processes images
 

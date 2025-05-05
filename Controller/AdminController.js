@@ -78,100 +78,42 @@ exports.createTourPackage = async (req, res) => {
 
 exports.updateTourPackage = async (req, res) => {
   try {
-    // Extract pkgId from query parameters
     const { pkgId } = req.query;
-    if (!pkgId) {
-      return res.status(400).json({
-        success: false,
-        message: "pkgId is required",
+    const updatedData = req.body;
+
+    // Upload image to Cloudinary if provided
+    if (req.file) {
+      const b64 = Buffer.from(req.file.buffer).toString("base64");
+      const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+
+      const result = await cloudinary.uploader.upload(dataURI, {
+        folder: "tour-packages",
+        resource_type: "auto",
       });
+
+      // Save the Cloudinary URL to the DB
+      updatedData.imageurl = result.secure_url;
     }
 
-    // Fetch the existing document
-    const existingTourPackage = await TourPackageDetail.findById(pkgId);
-    if (!existingTourPackage) {
-      return res.status(404).json({
-        success: false,
-        message: "Tour package not found",
-      });
-    }
-
-    // Define allowed fields for update
-    const allowedFields = [
-      "gallery",
-      "overview",
-      "amenities",
-      "aboutProperty",
-      "accessibility",
-      "commonAreas",
-      "packageType",
-    ];
-
-    // Build updateData from req.body for allowed fields,
-    // parsing JSON-stringified fields so they become objects/arrays.
-    let updateData = {};
-    allowedFields.forEach((field) => {
-      if (req.body[field] !== undefined && req.body[field] !== "") {
-        let value = req.body[field];
-        if (
-          ["overview", "amenities", "aboutProperty", "commonAreas"].includes(
-            field
-          )
-        ) {
-          try {
-            value = JSON.parse(value);
-          } catch (err) {
-            // If parsing fails, log and ignore this field update.
-            console.error(`Error parsing ${field}:`, err);
-            return;
-          }
-        }
-        updateData[field] = value;
-      }
-    });
-
-    // Handle new gallery images if provided
-    if (req.files && req.files.length > 0) {
-      const gallery = [];
-      for (const file of req.files) {
-        const b64 = Buffer.from(file.buffer).toString("base64");
-        const dataURI = `data:${file.mimetype};base64,${b64}`;
-        const result = await cloudinary.uploader.upload(dataURI, {
-          folder: "tour-packages",
-          resource_type: "auto",
-        });
-        gallery.push(result.secure_url);
-      }
-      updateData.gallery = gallery;
-    }
-
-    // Merge incoming updateData with existing document.
-    // This ensures that if a field is not updated (or empty),
-    // the existing value is preserved.
-    const mergedData = {
-      ...existingTourPackage.toObject(),
-      ...updateData,
-    };
-
-    // Perform the update with schema validations enabled.
-    const updatedTourPackage = await TourPackageDetail.findByIdAndUpdate(
+    const updatedPackage = await TourPackages.findByIdAndUpdate(
       pkgId,
-      mergedData,
-      { new: true, runValidators: true }
+      updatedData,
+      {
+        new: true,
+        runValidators: true,
+      }
     );
 
-    res.status(200).json({
-      success: true,
-      message: "Tour package updated successfully",
-      data: updatedTourPackage,
-    });
+    if (!updatedPackage) {
+      return res.status(404).json({ message: "Tour package not found" });
+    }
+
+    res.status(200).json(updatedPackage);
   } catch (error) {
-    console.error("Error updating tour package:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error updating tour package",
-      error: error.message,
-    });
+    console.error(error);
+    res
+      .status(500)
+      .json({ message: "Server error while updating tour package" });
   }
 };
 
@@ -260,7 +202,7 @@ exports.EditTourPackage = async (req, res) => {
     });
 
     // Handle new gallery images if provided
-    console.log("image uplaod operation on")
+    console.log("image uplaod operation on");
     if (req.files && req.files.length > 0) {
       const imageurl = [];
       for (const file of req.files) {
@@ -271,7 +213,7 @@ exports.EditTourPackage = async (req, res) => {
           resource_type: "auto",
         });
         imageurl.push(result.secure_url);
-        console.log(imageurl,22222222)
+        console.log(imageurl, 22222222);
       }
       updateData.imageurl = imageurl;
     }
