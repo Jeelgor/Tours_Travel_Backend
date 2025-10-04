@@ -6,94 +6,94 @@ const { Tourpackages } = require("../models/TourPackages");
 const stripe = require("stripe")(process.env.STRIP_SECRET_KEY);
 const { getIo } = require("../socket/socket");
 const Payment = require("../models/PaymentModel");
+const { sendBookingUpdate } = require("../realtime/socket");
 
 // Controller to handle booking creation
-exports.createBooking = async (req, res) => {
-  try {
-    const {
-      _id,
-      packageId,
-      name,
-      email,
-      numberOfTravelers,
-      specialRequests,
-      fromDate,
-      toDate,
-      address,
-      mobileNumber,
-      pincode,
-    } = req.body;
+// exports.createBooking = async (req, res) => {
+//   try {
+//     const {
+//       _id,
+//       packageId,
+//       name,
+//       email,
+//       numberOfTravelers,
+//       specialRequests,
+//       fromDate,
+//       toDate,
+//       address,
+//       mobileNumber,
+//       pincode,
+//     } = req.body;
 
-    // Get userId from authenticated user
-    const userId = req.user?.id; // Ensure user exists before accessing id
+//     // Get userId from authenticated user
+//     const userId = req.user?.id; // Ensure user exists before accessing id
 
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "User authentication required",
-      });
-    }
+//     if (!userId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "User authentication required",
+//       });
+//     }
 
-    // Validate user exists
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
+//     // Validate user exists
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "User not found",
+//       });
+//     }
 
-    // Validate tour package
-    const tour = await TourPackages.findById(packageId);
-    if (!tour) {
-      return res.status(404).json({
-        success: false,
-        message: "Tour not found",
-      });
-    }
+//     // Validate tour package
+//     const tour = await TourPackages.findById(packageId);
+//     if (!tour) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Tour not found",
+//       });
+//     }
 
-    // Create booking
-    const newBooking = new Booking({
-      userId,
-      packageId,
-      name,
-      email,
-      numberOfTravelers,
-      specialRequests,
-      fromDate,
-      toDate,
-      address,
-      mobileNumber,
-      pincode,
-      status: "pending",
-    });
+//     // Create booking
+//     const newBooking = new Booking({
+//       userId,
+//       packageId,
+//       name,
+//       email,
+//       numberOfTravelers,
+//       specialRequests,
+//       fromDate,
+//       toDate,
+//       address,
+//       mobileNumber,
+//       pincode,
+//       status: "pending",
+//     });
 
-    await newBooking.save();
+//     await newBooking.save();
 
-    tour.Seatleft -= numberOfTravelers;
-    await tour.save();
+//     tour.Seatleft -= numberOfTravelers;
+//     await tour.save();
+//     sendBookingUpdate({ Seatleft: tour.Seatleft, packageId: tour._id });
 
-    getIo().emit("updateSeats", { _id, Seatleft: tour.Seatleft });
+//     res.status(201).json({
+//       success: true,
+//       message: "Booking initiated. Proceed with payment.",
+//       bookingId: newBooking._id,
+//       Seatleft: tour.Seatleft,
+//     });
+//   } catch (error) {
+//     console.error("Error creating booking:", error);
 
-    res.status(201).json({
-      success: true,
-      message: "Booking initiated. Proceed with payment.",
-      bookingId: newBooking._id,
-      Seatleft: tour.Seatleft,
-    });
-  } catch (error) {
-    console.error("Error creating booking:", error);
-
-    if (!res.headersSent) {
-      // Prevent multiple responses
-      return res.status(500).json({
-        success: false,
-        message: "Server error, unable to create booking",
-        error: error.message,
-      });
-    }
-  }
-};
+//     if (!res.headersSent) {
+//       // Prevent multiple responses
+//       return res.status(500).json({
+//         success: false,
+//         message: "Server error, unable to create booking",
+//         error: error.message,
+//       });
+//     }
+//   }
+// };
 
 exports.cancelExpiredBookings = async () => {
   const now = new Date();
@@ -140,10 +140,10 @@ exports.cancelExpiredBookings = async () => {
         await tour.save();
         console.log("After restoration, Tour Seats:", tour.Seatleft);
 
-        getIo().emit("updateSeats", {
-          _id: booking.packageId,
-          Seatleft: tour.Seatleft,
-        });
+        // getIo().emit("updateSeats", {
+        //   _id: booking.packageId,
+        //   Seatleft: tour.Seatleft,
+        // });
 
         // ✅ Delete the booking properly
         await Booking.deleteOne({ packageId: booking.packageId });
@@ -159,36 +159,69 @@ exports.cancelExpiredBookings = async () => {
 };
 
 // confirm-booking
-exports.ConfirmBooking = async (req, res) => {
+exports.createCheckoutSession = async (req, res) => {
   try {
-    const { bookingId, paymentIntentId } = req.body;
+    const {
+      packageId,
+      name,
+      email,
+      numberOfTravelers,
+      fromDate,
+      toDate,
+      address,
+      mobileNumber,
+      pincode,
+      specialRequests,
+    } = req.body;
 
-    // Verify the payment with Stripe
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    if (paymentIntent.status !== "succeeded") {
-      return res.status(400).json({ message: "Payment not confirmed" });
-    }
+    // Fetch the tour from DB
+    const tour = await TourPackages.findById(packageId);
+    if (!tour) return res.status(404).json({ error: "Tour not found" });
 
-    // Update the booking status
-    const booking = await Booking.findByIdAndUpdate(
-      bookingId,
-      { status: "confirmed", paymentIntentId },
-      { new: true }
-    );
+    // Clean price: remove commas and convert to paise
+    const cleanPrice = Number(tour.price.replace(/,/g, ""));
+    const amountInPaise = cleanPrice * 100;
 
-    if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
-    }
-
-    res.status(200).json({
-      message: "Booking confirmed!",
-      booking,
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "inr",
+            product_data: {
+              name: tour.title,
+              description: tour.highlights.join(", "),
+            },
+            unit_amount: amountInPaise,
+          },
+          quantity: Number(numberOfTravelers),
+        },
+      ],
+      mode: "payment",
+      success_url: `http://localhost:5173/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `http://localhost:5173/payment-cancel`,
+      metadata: {
+        userId: req.user.id,
+        packageId: tour._id.toString(),
+        name,
+        email,
+        numberOfTravelers,
+        fromDate,
+        toDate,
+        address,
+        mobileNumber,
+        pincode,
+        specialRequests: specialRequests || "",
+      },
     });
-  } catch (error) {
-    console.error("Confirmation error:", error);
-    res.status(500).json({ message: "Server error" });
+
+    res.status(200).json({ sessionId: session.id });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: err.message });
   }
 };
+
 // Get all bookings
 exports.getBookings = async (req, res) => {
   try {
@@ -351,10 +384,10 @@ exports.CancleBooking = async (req, res) => {
     if (tour) {
       tour.availableSeats += 1;
       await tour.save();
-      io.emit("seat-updated", {
-        tourId: tour._id,
-        availableSeats: tour.availableSeats,
-      });
+      // io.emit("seat-updated", {
+      //   tourId: tour._id,
+      //   availableSeats: tour.availableSeats,
+      // });
     }
 
     // Remove booking and payment record
