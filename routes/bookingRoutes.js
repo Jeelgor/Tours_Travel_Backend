@@ -19,7 +19,7 @@ router.put("/booking/:bookingId", BookingController.updateBooking);
 router.delete("/booking/:bookingId", BookingController.deleteBooking);
 
 //
-router.post("/CancleBooking", BookingController.CancleBooking);
+router.post("/CancleBooking", authMiddleware, BookingController.CancleBooking);
 
 // router.post(
 //   "/confirm-booking",

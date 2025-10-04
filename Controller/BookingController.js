@@ -357,48 +357,43 @@ exports.deleteBooking = async (req, res) => {
 exports.CancleBooking = async (req, res) => {
   try {
     const { bookingId } = req.body;
+    const userId = req.user?.id;
 
-    // Find the booking
-    const booking = await Booking.findById(bookingId);
+    const booking = await Booking.findOne({ _id: bookingId, userId });
     if (!booking) return res.status(404).json({ message: "Booking not found" });
 
-    // Find the corresponding payment record
-    const payment = await Payment.findOne({ bookingId: booking._id });
-    if (!payment || !payment.paymentIntentId) {
-      return res
-        .status(400)
-        .json({ message: "Payment details not found for this booking" });
-    }
+    if (booking.status === "cancelled")
+      return res.status(400).json({ message: "Booking is already cancelled" });
 
-    // Process refund via Stripe
-    const refund = await stripe.refunds.create({
-      payment_intent: payment.paymentIntentId,
+    // ✅ Update status
+    booking.status = "cancelled";
+    await booking.save();
+
+    // ✅ Restore seats
+    await TourPackages.findByIdAndUpdate(
+      booking.packageId,
+      { $inc: { Seatleft: Number(booking.numberOfTravelers) } },
+      { new: true }
+    );
+
+    // ✅ Refund using saved paymentIntentId
+    if (!booking.paymentIntentId)
+      return res.status(400).json({ message: "No paymentIntentId found" });
+
+    await stripe.refunds.create({
+      payment_intent: booking.paymentIntentId,
     });
+    booking.status = "refunded";
 
-    if (refund.status !== "succeeded") {
-      return res.status(400).json({ message: "Refund failed" });
-    }
+    console.log(
+      `✅ Booking ${bookingId} cancelled. Restored ${booking.numberOfTravelers} seats.`
+    );
 
-    // Restore seat count
-    const tour = await TourPackage.findById(booking.tourId);
-    if (tour) {
-      tour.availableSeats += 1;
-      await tour.save();
-      // io.emit("seat-updated", {
-      //   tourId: tour._id,
-      //   availableSeats: tour.availableSeats,
-      // });
-    }
-
-    // Remove booking and payment record
-    await Booking.findByIdAndDelete(bookingId);
-    await Payment.findByIdAndDelete(payment._id);
-
-    res
+    return res
       .status(200)
-      .json({ message: "Booking cancelled and refunded successfully." });
+      .json({ message: "Booking cancelled and refunded successfully" });
   } catch (error) {
-    console.error("Cancellation error:", error);
-    res.status(500).json({ message: "Server error" });
+    console.error("❌ Error cancelling booking:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };

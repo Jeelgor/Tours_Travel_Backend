@@ -24,6 +24,10 @@ const BookingSchema = new mongoose.Schema({
     required: true,
     default: "pending",
   },
+  paymentIntentId: {
+    type: String,
+    required: true,
+  },
   createdAt: { type: Date, default: Date.now },
 });
 
