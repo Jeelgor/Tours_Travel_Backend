@@ -1,14 +1,37 @@
-const { generateTourRecommendation } = require("../services/openai.service");
+const { getTourData } = require("../services/Ai.services");
+const { createTourChunks } = require("../Utility/Chunk");
+const { ragSearch } = require("../services/ragTours");
 
-const handleTourRecommendation = async (req, res) => {
+const fetchTourData = async (req, res) => {
   try {
-    const { userPrompt } = req.body;
-    const aiResponse = await generateTourRecommendation(userPrompt);
-    console.log(aiResponse, 999);
-    res.status(200).json({ message: aiResponse });
+    const tourData = await getTourData();
+    const allchunks = tourData.flatMap(createTourChunks);
+    res.status(200).json({ resource: allchunks });
   } catch (error) {
-    res.status(500).json({ message: "Error generating recommendation", error });
+    console.log(error);
+    res.status(500).json({ message: "Error getting TourData", error });
   }
 };
 
-module.exports = { handleTourRecommendation };
+const askTourAI = async (req, res) => {
+  try {
+    const { query } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ message: "Query is required" });
+    }
+
+    const result = await ragSearch(query);
+
+    res.status(200).json({
+      success: true,
+      answer: result.answer,
+      sources: result.sources,
+    });
+  } catch (error) {
+    console.error("AI Ask Error:", error);
+    res.status(500).json({ message: "AI request failed" });
+  }
+};
+
+module.exports = { fetchTourData, askTourAI };

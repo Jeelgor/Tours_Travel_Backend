@@ -12,6 +12,9 @@
   "dependencies": {
     "@paypal/checkout-server-sdk": "^1.0.3",
     "@sendgrid/mail": "^8.1.4",
+    "@supabase/supabase-js": "^2.98.0",
+    "@xenova/transformers": "^2.17.2",
+    "axios": "^1.13.6",
     "bcrypt": "^5.1.1",
     "body-parser": "^2.2.0",
     "bullmq": "^5.56.9",
@@ -27,7 +30,7 @@
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.15",
     "nodemon": "^3.1.4",
-    "openai": "^5.8.2",
+    "openai": "^5.23.2",
     "socket.io": "^4.8.1",
     "stripe": "^17.3.1"
   }
