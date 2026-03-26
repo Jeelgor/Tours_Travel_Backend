@@ -95,15 +95,19 @@ exports.LoginUser = async (req, res) => {
 
     // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000);
-    await sendotp(Email, otp);
 
-    // Save OTP in the database
+    // Save OTP in the database first
     const otpDoc = new OTP({
       Email: Email,
       otp: otp,
       expiresAt: Date.now() + 300000, // Expires in 5 minutes
     });
     await otpDoc.save();
+
+    // Send OTP email without blocking the response
+    sendotp(Email, otp).catch((err) =>
+      console.error("OTP email send failed:", err)
+    );
 
     // Include the token in the response
     res.status(200).json({

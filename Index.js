@@ -53,9 +53,11 @@ app.use(
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization", "Accept"],
     exposedHeaders: ["Content-Type", "Authorization"],
-    preflightContinue: true,
   })
 );
+
+// Explicitly handle preflight for all routes
+app.options("*", cors());
 
 // **Stripe webhook must be BEFORE express.json()**
 app.post(
