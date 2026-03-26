@@ -2,67 +2,26 @@ const Users = require("../models/Users");
 const OTP = require("../models/OtpModel");
 const sendotp = require("../Utility/SendOptMailer");
 const bcrypt = require("bcrypt");
-const {
-  authMiddleware,
-  genrateToken,
-} = require("../middleware/authMiddleware ");
-const jwt = require("jsonwebtoken");
+const { genrateToken } = require("../middleware/authMiddleware ");
 
 // Register User
 exports.RegisterUser = async (req, res) => {
-  const {
-    FirstName,
-    LastName,
-    Email,
-    Password,
-    SetPassword,
-    Pincode,
-    MobileNumber,
-    Address,
-  } = req.body;
+  const { FirstName, LastName, Email, Password, SetPassword, Pincode, MobileNumber, Address } = req.body;
 
   try {
-    // Check if user already exists
     let user = await Users.findOne({ Email });
     if (user) {
       return res.status(400).json({ msg: "User Already Exists" });
     }
 
-    // Hash the password before saving
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(Password, salt);
-
-    // Create new user with hashed password
-    user = new Users({
-      FirstName,
-      LastName,
-      Email,
-      Password: hashedPassword,
-      SetPassword,
-      Pincode,
-      MobileNumber,
-      Address,
-    });
-
+    user = new Users({ FirstName, LastName, Email, Password, SetPassword, Pincode, MobileNumber, Address });
     const response = await user.save();
 
-    // Generate the payload and token
-    const payload = {
-      id: response.id,
-      Email: response.Email,
-    };
-    console.log("Payload :", JSON.stringify(payload));
-    const token = genrateToken(payload);
-    console.log("Token is :", token);
+    const token = genrateToken({ id: response.id, Email: response.Email });
 
-    // Send response including user data and token
-    res.status(200).json({
-      msg: "User Registered Successfully",
-      response,
-      token,
-    });
+    res.status(200).json({ msg: "User Registered Successfully", response, token });
   } catch (error) {
-    console.log("Error in RegisterUser:", error);
+    console.error("Error in RegisterUser:", error);
     res.status(500).json({ msg: "Server Error" });
   }
 };
@@ -77,48 +36,22 @@ exports.LoginUser = async (req, res) => {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    // Compare against the hashed Password field
     const isMatch = await bcrypt.compare(Password, user.Password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    const payload = {
-      id: user._id, // Ensure you're using the correct field for the user ID
-      Email: user.Email,
-    };
+    const token = genrateToken({ id: user._id, Email: user.Email });
 
-    console.log("Payload:", JSON.stringify(payload)); // Log the payload here
-
-    const token = genrateToken(payload);
-    console.log("Token is:", token); // Log the token
-
-    // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000);
+    await new OTP({ Email, otp, expiresAt: Date.now() + 300000 }).save();
 
-    // Save OTP in the database first
-    const otpDoc = new OTP({
-      Email: Email,
-      otp: otp,
-      expiresAt: Date.now() + 300000, // Expires in 5 minutes
-    });
-    await otpDoc.save();
+    sendotp(Email, otp).catch((err) => console.error("OTP email send failed:", err));
 
-    // Send OTP email without blocking the response
-    sendotp(Email, otp).catch((err) =>
-      console.error("OTP email send failed:", err)
-    );
-
-    // Include the token in the response
-    res.status(200).json({
-      message: "OTP sent to your email. Please verify OTP to complete login.",
-      token, // Send the token in the response
-    });
+    res.status(200).json({ message: "OTP sent to your email. Please verify OTP to complete login.", token });
   } catch (error) {
-    console.error("Error logging in user:", error); // Log the error
-    res
-      .status(500)
-      .json({ message: "Error logging in user", error: error.message });
+    console.error("Error logging in user:", error);
+    res.status(500).json({ message: "Error logging in user", error: error.message });
   }
 };
 
@@ -127,25 +60,18 @@ exports.verifyOTP = async (req, res) => {
   const { otp, Email } = req.body;
 
   try {
-    // Find OTP document by OTP code AND Email
     const otpDoc = await OTP.findOne({ otp, Email });
     if (!otpDoc) {
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    // Check if OTP is expired
     if (otpDoc.expiresAt < Date.now()) {
-      await OTP.deleteOne({ otp, Email }); // Optionally, remove expired OTP
+      await OTP.deleteOne({ otp, Email });
       return res.status(400).json({ message: "OTP expired" });
     }
 
-    // OTP verified successfully
-    res
-      .status(200)
-      .json({ message: "OTP verified successfully. Login complete." });
-
-    // Optionally, delete the OTP after successful verification
     await OTP.deleteOne({ otp, Email });
+    res.status(200).json({ message: "OTP verified successfully. Login complete." });
   } catch (error) {
     console.error("Error verifying OTP:", error);
     if (!res.headersSent) {
@@ -157,7 +83,7 @@ exports.verifyOTP = async (req, res) => {
 // Profile
 exports.profile = async (req, res) => {
   try {
-    const user = await Users.findById(req.user.id).select("-password"); // Exclude password
+    const user = await Users.findById(req.user.id).select("-Password -SetPassword");
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -170,13 +96,9 @@ exports.profile = async (req, res) => {
 // Update Profile
 exports.updateUserProfile = async (req, res) => {
   try {
-    // Since authMiddleware is already adding user to req object
-    // we can directly use req.user instead of verifying token again
     const userId = req.user.id;
-
     const { FirstName, LastName, Address, MobileNumber, Pincode } = req.body;
 
-    // Find and update user
     const updatedUser = await Users.findByIdAndUpdate(
       userId,
       {
@@ -185,17 +107,14 @@ exports.updateUserProfile = async (req, res) => {
           ...(LastName && { LastName }),
           ...(Address && { Address }),
           ...(MobileNumber && { MobileNumber }),
-          ...(Pincode && { Pincode })
-        }
+          ...(Pincode && { Pincode }),
+        },
       },
       { new: true }
     ).select("-Password -SetPassword");
 
     if (!updatedUser) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found"
-      });
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
     res.status(200).json({
@@ -207,16 +126,11 @@ exports.updateUserProfile = async (req, res) => {
         Email: updatedUser.Email,
         Address: updatedUser.Address,
         MobileNumber: updatedUser.MobileNumber,
-        Pincode: updatedUser.Pincode
-      }
+        Pincode: updatedUser.Pincode,
+      },
     });
-
   } catch (error) {
     console.error("Error updating profile:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };

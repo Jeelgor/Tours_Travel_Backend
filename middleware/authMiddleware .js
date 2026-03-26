@@ -12,22 +12,14 @@ exports.authMiddleware = async (req, res, next) => {
   if (!token) return res.status(401).json({ msg: "Unauthorized" });
 
   try {
-    // Verify the token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET, (err, res) => {
-      if (err) {
-        return "Token Expired";
-      } else {
-        return res;
-      }
-    });
-
-    req.userkey = decoded;
-    req.user = { id: decoded.id, Email: decoded.Email }; // Ensure this attaches the user ID
-    console.log("Middleware is working ", req.user);
+    // Verify the token synchronously
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = { id: decoded.id, Email: decoded.Email };
     next();
   } catch (err) {
     console.error("Token verification failed:", err);
-    return res.status(401).json({ msg: "Invalid Token" });
+    const msg = err.name === "TokenExpiredError" ? "Token Expired" : "Invalid Token";
+    return res.status(401).json({ msg });
   }
 };
 
