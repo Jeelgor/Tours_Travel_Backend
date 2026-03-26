@@ -13,7 +13,7 @@ exports.stripeWebhookHandler = async (req, res) => {
     event = stripe.webhooks.constructEvent(
       req.body, // raw body required
       sig,
-      process.env.STRIPE_WEBHOOK_SECRET
+      process.env.STRIPE_WEBHOOK_SECRET,
     );
   } catch (err) {
     console.log("Webhook signature verification failed:", err.message);
@@ -31,6 +31,9 @@ exports.stripeWebhookHandler = async (req, res) => {
       const travelers = Number(session.metadata.numberOfTravelers);
 
       // 2️⃣ Prevent overbooking
+
+      console.log(tour.Seatleft, 9999);
+      console.log(travelers,22);
       if (tour.Seatleft < travelers) {
         console.log("❌ Not enough seats left for booking");
         return res.status(400).send("Not enough seats available");
@@ -47,14 +50,12 @@ exports.stripeWebhookHandler = async (req, res) => {
 
       if (existingBooking) {
         console.log(
-          `⚠️ Booking already exists for user ${session.metadata.userId}`
+          `⚠️ Booking already exists for user ${session.metadata.userId}`,
         );
-        return res
-          .status(200)
-          .json({
-            message: "Booking already exists",
-            booking: existingBooking,
-          });
+        return res.status(200).json({
+          message: "Booking already exists",
+          booking: existingBooking,
+        });
       }
 
       // 4️⃣ Create Booking
@@ -81,7 +82,7 @@ exports.stripeWebhookHandler = async (req, res) => {
       const updatedTour = await TourPackages.findByIdAndUpdate(
         session.metadata.packageId,
         { $inc: { Seatleft: -travelers } },
-        { new: true }
+        { new: true },
       );
       console.log(`✅ Seats updated. Seats left: ${updatedTour.Seatleft}`);
 

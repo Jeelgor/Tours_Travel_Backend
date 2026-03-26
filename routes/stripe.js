@@ -47,8 +47,8 @@ const handleStripeWebhook = async (req, res) => {
     try {
       // Atomically decrement seats
       const tour = await TourPackages.findOneAndUpdate(
-        { _id: packageId, SeatLeft: { $gte: Number(numberOfTravelers) } },
-        { $inc: { SeatLeft: -Number(numberOfTravelers) } },
+        { _id: packageId, Seatleft: { $gte: Number(numberOfTravelers) } },
+        { $inc: { Seatleft: -Number(numberOfTravelers) } },
         { new: true }
       );
 
@@ -70,6 +70,7 @@ const handleStripeWebhook = async (req, res) => {
         mobileNumber,
         pincode,
         specialRequests,
+        paymentIntentId: session.payment_intent,
         status: "paid",
       });
 
@@ -113,9 +114,9 @@ const verifyCheckoutSession = async (req, res) => {
     const tour = await TourPackages.findOneAndUpdate(
       {
         _id: session.metadata.packageId,
-        SeatLeft: { $gte: Number(session.metadata.numberOfTravelers) },
+        Seatleft: { $gte: Number(session.metadata.numberOfTravelers) },
       },
-      { $inc: { SeatLeft: -Number(session.metadata.numberOfTravelers) } },
+      { $inc: { Seatleft: -Number(session.metadata.numberOfTravelers) } },
       { new: true }
     );
 
@@ -136,6 +137,7 @@ const verifyCheckoutSession = async (req, res) => {
       mobileNumber: session.metadata.mobileNumber,
       pincode: session.metadata.pincode,
       specialRequests: session.metadata.specialRequests,
+      paymentIntentId: session.payment_intent,
       status: "paid",
     });
 

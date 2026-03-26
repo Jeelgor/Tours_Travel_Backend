@@ -1,7 +1,7 @@
 const { groupChunksByTour } = require("../Utility/groupContext");
 const { buildContextString } = require("../Utility/buildContext");
 const { generateGrokAnswer } = require("./grokAnswer");
-const { searchTours } = require("./searchTours"); // 👈 your vector search
+const { searchTours } = require("./searchTours"); //  vector search
 
 const ragSearch = async (question) => {
   // 1️⃣ get similar chunks from vector DB

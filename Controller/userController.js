@@ -77,8 +77,8 @@ exports.LoginUser = async (req, res) => {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    // Ensure you're comparing the Password with the correct field
-    const isMatch = await bcrypt.compare(Password, user.SetPassword); // Assuming 'Password' is the field name
+    // Compare against the hashed Password field
+    const isMatch = await bcrypt.compare(Password, user.Password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
@@ -120,18 +120,18 @@ exports.LoginUser = async (req, res) => {
 
 // Verify OTP
 exports.verifyOTP = async (req, res) => {
-  const { otp } = req.body;
+  const { otp, Email } = req.body;
 
   try {
-    // Find OTP document by OTP code and Email
-    const otpDoc = await OTP.findOne({ otp });
+    // Find OTP document by OTP code AND Email
+    const otpDoc = await OTP.findOne({ otp, Email });
     if (!otpDoc) {
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
     // Check if OTP is expired
     if (otpDoc.expiresAt < Date.now()) {
-      await OTP.deleteOne({ otp }); // Optionally, remove expired OTP
+      await OTP.deleteOne({ otp, Email }); // Optionally, remove expired OTP
       return res.status(400).json({ message: "OTP expired" });
     }
 
@@ -141,7 +141,7 @@ exports.verifyOTP = async (req, res) => {
       .json({ message: "OTP verified successfully. Login complete." });
 
     // Optionally, delete the OTP after successful verification
-    await OTP.deleteOne({ otp });
+    await OTP.deleteOne({ otp, Email });
   } catch (error) {
     console.error("Error verifying OTP:", error);
     if (!res.headersSent) {
