@@ -59,13 +59,6 @@ app.use(
 // Explicitly handle preflight for all routes
 app.options("*", cors());
 
-// **Stripe webhook must be BEFORE express.json()**
-app.post(
-  "/api/stripe/webhook",
-  bodyParser.raw({ type: "application/json" }),
-  stripeWebhookHandler
-);
-
 // Middleware to parse JSON for all other routes
 app.use(express.json());
 

@@ -27,6 +27,7 @@ const BookingSchema = new mongoose.Schema({
   paymentIntentId: {
     type: String,
     required: true,
+    unique: true, // This ensures only one booking can exist per payment
   },
   createdAt: { type: Date, default: Date.now },
 });

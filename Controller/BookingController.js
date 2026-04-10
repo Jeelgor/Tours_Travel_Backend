@@ -12,7 +12,6 @@ const { sendBookingUpdate } = require("../realtime/socket");
 // exports.createBooking = async (req, res) => {
 //   try {
 //     const {
-//       _id,
 //       packageId,
 //       name,
 //       email,
@@ -26,7 +25,7 @@ const { sendBookingUpdate } = require("../realtime/socket");
 //     } = req.body;
 
 //     // Get userId from authenticated user
-//     const userId = req.user?.id; // Ensure user exists before accessing id
+//     const userId = req.user?.id; 
 
 //     if (!userId) {
 //       return res.status(400).json({
@@ -35,25 +34,35 @@ const { sendBookingUpdate } = require("../realtime/socket");
 //       });
 //     }
 
-//     // Validate user exists
-//     const user = await User.findById(userId);
-//     if (!user) {
-//       return res.status(404).json({
+//     // 1️⃣ Atomic seat deduction
+//     // OLD APPROACH (Race Condition): 
+//     // const tour = await TourPackages.findById(packageId);
+//     // if (tour.Seatleft < numberOfTravelers) ...
+//     // tour.Seatleft -= numberOfTravelers; await tour.save();
+//     // Problem: Two requests can read the same Seatleft before either updates it.
+
+//     // NEW APPROACH (Atomic):
+//     // Using findOneAndUpdate with a filter ensures the check and update 
+//     // happen as a single atomic operation in MongoDB.
+//     const updatedTour = await TourPackages.findOneAndUpdate(
+//       { 
+//         _id: packageId, 
+//         Seatleft: { $gte: Number(numberOfTravelers) } 
+//       },
+//       { 
+//         $inc: { Seatleft: -Number(numberOfTravelers) } 
+//       },
+//       { new: true }
+//     );
+
+//     if (!updatedTour) {
+//       return res.status(400).json({
 //         success: false,
-//         message: "User not found",
+//         message: "Not enough seats available or tour not found",
 //       });
 //     }
 
-//     // Validate tour package
-//     const tour = await TourPackages.findById(packageId);
-//     if (!tour) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Tour not found",
-//       });
-//     }
-
-//     // Create booking
+//     // 2️⃣ Create booking only if seat deduction succeeded
 //     const newBooking = new Booking({
 //       userId,
 //       packageId,
@@ -67,25 +76,24 @@ const { sendBookingUpdate } = require("../realtime/socket");
 //       mobileNumber,
 //       pincode,
 //       status: "pending",
+//       // Note: paymentIntentId is required by schema, would need to be provided here
 //     });
 
 //     await newBooking.save();
 
-//     tour.Seatleft -= numberOfTravelers;
-//     await tour.save();
-//     sendBookingUpdate({ Seatleft: tour.Seatleft, packageId: tour._id });
+//     // Notify via socket
+//     sendBookingUpdate({ Seatleft: updatedTour.Seatleft, packageId: updatedTour._id });
 
 //     res.status(201).json({
 //       success: true,
-//       message: "Booking initiated. Proceed with payment.",
+//       message: "Booking initiated successfully.",
 //       bookingId: newBooking._id,
-//       Seatleft: tour.Seatleft,
+//       Seatleft: updatedTour.Seatleft,
 //     });
 //   } catch (error) {
 //     console.error("Error creating booking:", error);
 
 //     if (!res.headersSent) {
-//       // Prevent multiple responses
 //       return res.status(500).json({
 //         success: false,
 //         message: "Server error, unable to create booking",
@@ -125,28 +133,24 @@ exports.cancelExpiredBookings = async () => {
           return;
         }
 
-        // ✅ Fetch the tour package using the correct packageId
-        const tour = await TourPackages.findById(booking.packageId);
+        // ✅ Restore seats atomically using $inc
+        const updatedTour = await TourPackages.findByIdAndUpdate(
+          booking.packageId,
+          { $inc: { Seatleft: booking.numberOfTravelers } },
+          { new: true }
+        );
 
-        if (!tour) {
+        if (!updatedTour) {
           console.log(
             `⛔ ERROR: Tour package not found for packageId ${booking.packageId}`
           );
           return;
         }
 
-        console.log("Before restoration, Tour Seats:", tour.Seatleft);
-        tour.Seatleft += booking.numberOfTravelers;
-        await tour.save();
-        console.log("After restoration, Tour Seats:", tour.Seatleft);
-
-        // getIo().emit("updateSeats", {
-        //   _id: booking.packageId,
-        //   Seatleft: tour.Seatleft,
-        // });
+        console.log(`✅ Seats restored. New count: ${updatedTour.Seatleft}`);
 
         // ✅ Delete the booking properly
-        await Booking.deleteOne({ packageId: booking.packageId });
+        await Booking.deleteOne({ _id: booking._id });
 
         console.log(`✅ Booking ${booking._id} canceled and seats restored.`);
       })
@@ -174,9 +178,19 @@ exports.createCheckoutSession = async (req, res) => {
       specialRequests,
     } = req.body;
 
-    // Fetch the tour from DB
+    // 1️⃣ Check for availability (ReadOnly check)
+    // We don't decrement here anymore to avoid double-counting with the webhook/verify calls.
     const tour = await TourPackages.findById(packageId);
-    if (!tour) return res.status(404).json({ error: "Tour not found" });
+    
+    if (!tour) {
+      return res.status(404).json({ error: "Tour not found" });
+    }
+
+    if (tour.Seatleft < Number(numberOfTravelers)) {
+      return res.status(400).json({ 
+        error: `Only ${tour.Seatleft} seats available` 
+      });
+    }
 
     // Clean price: remove commas and convert to paise
     const cleanPrice = Number(tour.price.replace(/,/g, ""));
