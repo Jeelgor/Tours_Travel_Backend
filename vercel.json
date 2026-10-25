@@ -7,11 +7,11 @@
     },
     {
       "source": "/(.*)",
-      "destination": "/Index.js"
+      "destination": "/api/index.js"
     }
   ],
   "functions": {
-    "Index.js": {
+    "api/index.js": {
       "maxDuration": 30
     }
   },
