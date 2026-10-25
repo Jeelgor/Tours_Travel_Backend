@@ -1,42 +1,29 @@
-// Cloudinary and other setup
-const cloudinary = require("cloudinary").v2;
-const dotenv = require("dotenv");
+const { uploadFileToCloudinary, cloudinary } = require("../Utility/cloudinaryHelper");
 const imageModel = require("../models/ClodinaryImageModel");
-const cloudinarysetup = require("../Utility/setup");
-
-dotenv.config(); // Load environment variables from .env file
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 // Function to upload image
 exports.uploadImage = async (req, res) => {
-  // Check if a file was uploaded
   if (!req.file) {
     return res.status(400).json({ msg: "No file uploaded." });
   }
 
   try {
-    // Upload the file to Cloudinary
-    const filePath = req.file.path;
-    console.log(filePath);
-    const result = await cloudinarysetup.uploader.upload(filePath, {
-      folder: "TourandTravel",
-    });
+    const imageUrl = await uploadFileToCloudinary(req.file, "TourandTravel");
+    if (!imageUrl) {
+      return res.status(500).json({ msg: "Failed to upload image to Cloudinary." });
+    }
 
     // Call the function to fetch and store images after successful upload
-    await getImages(); // Call the getImages function directly
+    await getImages();
 
     res.status(200).json({
       success: true,
       msg: "Image uploaded successfully.",
-      data: result,
+      url: imageUrl,
     });
   } catch (err) {
-    console.log(err);
-    return res.status(500).json({ msg: "Error in Cloudinary setup." });
+    console.error("Cloudinary upload error:", err);
+    return res.status(500).json({ msg: "Error in Cloudinary setup.", error: err.message });
   }
 };
 
@@ -48,16 +35,17 @@ const getImages = async () => {
       prefix: "TourandTravel/",
     });
 
-    const images = result.resources.map((resource) => ({
+    const images = (result.resources || []).map((resource) => ({
       url: resource.secure_url,
       public_id: resource.public_id,
     }));
 
-    // Save each image URL in MongoDB
-    const savedImages = await imageModel.insertMany(images);
-    console.log(savedImages);
-    // You might want to handle the response differently based on your app's structure
+    if (images.length > 0) {
+      await imageModel.insertMany(images, { ordered: false }).catch(() => {});
+    }
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching Cloudinary images:", error);
   }
 };
+
+exports.getImages = getImages;

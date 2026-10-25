@@ -1,66 +1,63 @@
 const TourDetail = require("../models/TourDetail");
+const { uploadFileToCloudinary } = require("../Utility/cloudinaryHelper");
 
 exports.TourDetails = async (req, res) => {
-  console.log("Request Body:", req.body); // Log the request body
-  console.log("Uploaded Files:", req.files); // Log the uploaded files
-
   if (!req.body.packages) {
     return res.status(400).json({ msg: "No packages provided." });
   }
 
   let TourPackagesArray;
   try {
-    TourPackagesArray = JSON.parse(req.body.packages);
+    TourPackagesArray = typeof req.body.packages === "string"
+      ? JSON.parse(req.body.packages)
+      : req.body.packages;
   } catch (error) {
     return res.status(400).json({ msg: "Invalid JSON format for packages." });
   }
 
-  if (!req.files || req.files.length === 0) {
-    return res.status(400).json({ msg: "No files uploaded." });
-  }
-
   try {
-    const packagesWithImages = TourPackagesArray.map((packageData, index) => {
-      // Extract 3 images per package, assuming req.files is ordered correctly
-      const galleryImages = req.files
-        .slice(index * 3, index * 3 + 3)
-        .map((file) => file.path);
+    const uploadedFiles = req.files || [];
+    const packagesWithImages = await Promise.all(
+      TourPackagesArray.map(async (packageData, index) => {
+        // Find corresponding images if uploaded
+        const sliceStart = index * 3;
+        const packageFiles = uploadedFiles.slice(sliceStart, sliceStart + 3);
 
-      if (galleryImages.length !== 3) {
-        throw new Error(`Package ${index + 1} requires exactly 3 images.`);
-      }
+        const uploadedGallery = await Promise.all(
+          packageFiles.map(file => uploadFileToCloudinary(file, "tour-packages"))
+        );
 
-      return {
-        ...packageData,
-        gallery: galleryImages, // Store the 3 images in the gallery array
-      };
-    });
+        const gallery = uploadedGallery.filter(Boolean);
+        const finalGallery = gallery.length > 0 ? gallery : (packageData.gallery || []);
+
+        return {
+          ...packageData,
+          gallery: finalGallery,
+        };
+      })
+    );
 
     await TourDetail.insertMany(packagesWithImages);
-
-    res.status(200).json({ msg: "Packages added successfully!" });
+    res.status(200).json({ msg: "Packages added successfully!", count: packagesWithImages.length });
   } catch (error) {
-    res
-      .status(500)
-      .json({ msg: "Failed to add packages, please try again.", error });
-    console.log(error);
+    console.error("Error adding tour details:", error);
+    res.status(500).json({ msg: "Failed to add packages, please try again.", error: error.message });
   }
 };
 
 exports.DeletePackagesDetails = async (req, res) => {
   try {
-    await TourDetail.deleteMany({}); // This deletes all documents in the collection
+    await TourDetail.deleteMany({});
     res.status(200).json({ msg: "All data has been deleted" });
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ msg: "Failed to delete data", error });
+    console.error("Error deleting tour details:", error);
+    res.status(500).json({ msg: "Failed to delete data", error: error.message });
   }
 };
 
 exports.getTourDetailPackages = async (req, res) => {
   try {
     const { pkgId } = req.params;
-
     const packageDetail = await TourDetail.findById(pkgId);
 
     if (!packageDetail) {
@@ -70,6 +67,6 @@ exports.getTourDetailPackages = async (req, res) => {
     res.status(200).json(packageDetail);
   } catch (error) {
     console.error("Error fetching package details:", error);
-    res.status(500).json({ msg: "Failed to fetch package details.", error });
+    res.status(500).json({ msg: "Failed to fetch package details.", error: error.message });
   }
 };

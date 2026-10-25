@@ -1,5 +1,5 @@
 const Stripe = require("stripe");
-const stripe = Stripe(process.env.STRIP_SECRET_KEY);
+const stripe = Stripe(process.env.STRIP_SECRET_KEY || "sk_test_dummy");
 const Booking = require("../models/Booking");
 const TourPackages = require("../models/TourPackages");
 const Payment = require("../models/PaymentModel");
@@ -8,10 +8,11 @@ const Payment = require("../models/PaymentModel");
 exports.stripeWebhookHandler = async (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
+  const rawBody = req.rawBody || req.body;
 
   try {
     event = stripe.webhooks.constructEvent(
-      req.body, // raw body required
+      rawBody,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET,
     );
@@ -24,10 +25,8 @@ exports.stripeWebhookHandler = async (req, res) => {
     const session = event.data.object;
 
     try {
-      const travelers = Number(session.metadata.numberOfTravelers);
+      const travelers = Number(session.metadata?.numberOfTravelers || 1);
 
-      // 1️⃣ Check if the same booking already exists (Idempotency check)
-      // This prevents duplicate bookings if the webhook is retried
       const existingBooking = await Booking.findOne({
         paymentIntentId: session.payment_intent,
       });
@@ -42,38 +41,24 @@ exports.stripeWebhookHandler = async (req, res) => {
         });
       }
 
-      // 2️⃣ Prevent overbooking with an ATOMIC database operation
-      // OLD APPROACH (Race Condition): 
-      // 1. tour = await TourPackages.findById(...)
-      // 2. if (tour.Seatleft < travelers) return error
-      // 3. tour.Seatleft -= travelers; await tour.save()
-      // This allowed two concurrent requests to both see enough seats before either updated the DB.
-
-      // NEW APPROACH (Atomic):
-      // We use findOneAndUpdate with a filter that includes the seat check.
-      // This ensures that the check and decrement happen as a single, indivisible operation in MongoDB.
       const updatedTour = await TourPackages.findOneAndUpdate(
         {
           _id: session.metadata.packageId,
-          Seatleft: { $gte: travelers } // Condition: Only if enough seats are available
+          Seatleft: { $gte: travelers },
         },
         { 
-          $inc: { Seatleft: -travelers } // Action: Decrement seats atomically
+          $inc: { Seatleft: -travelers } 
         },
-        { new: true } // Return the updated document
+        { new: true }
       );
 
       if (!updatedTour) {
-        // If updatedTour is null, it means either the tour doesn't exist 
-        // OR (more likely) Seatleft is now less than requested travelers.
         console.log("❌ Not enough seats left or tour not found during atomic update");
         return res.status(400).send("Not enough seats available or tour not found");
       }
 
       console.log(`✅ Seats updated atomically. Seats left: ${updatedTour.Seatleft}`);
 
-      // 3️⃣ Create Booking
-      // We only reach this point if the seat deduction was successful.
       const bookingData = {
         userId: session.metadata.userId,
         packageId: session.metadata.packageId,
@@ -93,7 +78,6 @@ exports.stripeWebhookHandler = async (req, res) => {
       const newBooking = await Booking.create(bookingData);
       console.log(`✅ Booking saved: ${newBooking._id}`);
 
-      // 4️⃣ Save Payment record
       const paymentData = {
         userId: session.metadata.userId,
         userEmail: session.metadata.email,
@@ -101,7 +85,7 @@ exports.stripeWebhookHandler = async (req, res) => {
         amount: session.amount_total,
         packageName: updatedTour.title,
         status: "succeeded",
-        paymentMethod: session.payment_method_types[0],
+        paymentMethod: session.payment_method_types?.[0] || "card",
         bookingId: newBooking._id,
         paymentDate: new Date(),
       };
@@ -114,6 +98,5 @@ exports.stripeWebhookHandler = async (req, res) => {
     }
   }
 
-  // Return a 200 to acknowledge receipt of the event
   res.json({ received: true });
 };

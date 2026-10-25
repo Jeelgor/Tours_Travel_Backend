@@ -6,10 +6,11 @@ const UsersSchema = new mongoose.Schema({
   LastName: { type: String, required: true },
   Email: { type: String, required: true, unique: true },
   Password: { type: String, required: true },
-  SetPassword: { type: String, required: true },
+  SetPassword: { type: String },
   Address: { type: String },
   MobileNumber: { type: String },
   Pincode: { type: String },
+  role: { type: String, enum: ["user", "admin"], default: "user" },
 });
 
 UsersSchema.pre("save", async function (next) {
@@ -17,7 +18,7 @@ UsersSchema.pre("save", async function (next) {
     const salt = await bcrypt.genSalt(10);
     this.Password = await bcrypt.hash(this.Password, salt);
   }
-  if (this.isModified("SetPassword")) {
+  if (this.isModified("SetPassword") && this.SetPassword) {
     const salt = await bcrypt.genSalt(10);
     this.SetPassword = await bcrypt.hash(this.SetPassword, salt);
   }

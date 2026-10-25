@@ -1,5 +1,4 @@
 const express = require("express");
-const bodyParser = require("body-parser");
 const Stripe = require("stripe");
 const Booking = require("../models/Booking");
 const TourPackages = require("../models/TourPackages");
@@ -61,16 +60,16 @@ async function processBooking(session) {
         userEmail: email,
         paymentIntentId,
         amount: session.amount_total,
-        packageName: "REFUNDED: " + (session.metadata.packageName || "Tour"),
+        packageName: "REFUNDED: " + (session.metadata?.packageName || "Tour"),
         status: "refund_initiated",
-        paymentMethod: session.payment_method_types[0],
+        paymentMethod: session.payment_method_types?.[0] || "card",
         paymentDate: new Date(),
       });
 
       // INITIATE AUTOMATIC REFUND
       await stripe.refunds.create({
         payment_intent: paymentIntentId,
-        reason: "requested_by_customer", // Best fit for automated out-of-stock
+        reason: "requested_by_customer",
       });
 
       throw new Error("NOT_ENOUGH_SEATS");
@@ -91,7 +90,7 @@ async function processBooking(session) {
       address,
       mobileNumber,
       pincode,
-      specialRequests,
+      specialRequests: specialRequests || "",
       paymentIntentId,
       status: "paid",
     });
@@ -104,7 +103,7 @@ async function processBooking(session) {
       amount: session.amount_total,
       packageName: tour.title,
       status: "succeeded",
-      paymentMethod: session.payment_method_types[0],
+      paymentMethod: session.payment_method_types?.[0] || "card",
       bookingId: booking._id,
       paymentDate: new Date(),
     });
@@ -127,10 +126,11 @@ async function processBooking(session) {
 const handleStripeWebhook = async (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
+  const rawBody = req.rawBody || req.body;
 
   try {
     event = stripe.webhooks.constructEvent(
-      req.body,
+      rawBody,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
@@ -144,8 +144,6 @@ const handleStripeWebhook = async (req, res) => {
     try {
       await processBooking(session);
     } catch (err) {
-      // Even if it fails (e.g. no seats), we've handled the refund in processBooking.
-      // We return 200 to Stripe because we have "processed" the event.
       console.log("Webhook processed with internal error (likely refund triggered)");
     }
   }
@@ -196,14 +194,15 @@ const cancelCheckoutSession = async (req, res) => {
   }
 
   try {
-    // Only restore if the user manually cancelled before paying
     const updatedTour = await TourPackages.findByIdAndUpdate(
       packageId,
       { $inc: { Seatleft: Number(numberOfTravelers) } },
       { new: true }
     );
     
-    sendBookingUpdate({ Seatleft: updatedTour.Seatleft, packageId: updatedTour._id });
+    if (updatedTour) {
+      sendBookingUpdate({ Seatleft: updatedTour.Seatleft, packageId: updatedTour._id });
+    }
     res.json({ message: "Seats restored successfully" });
   } catch (err) {
     console.error("Error restoring seats:", err);
@@ -214,7 +213,7 @@ const cancelCheckoutSession = async (req, res) => {
 // Routes
 router.post(
   "/webhook",
-  bodyParser.raw({ type: "application/json" }),
+  express.raw({ type: "application/json" }),
   handleStripeWebhook
 );
 router.post("/verify-checkout-session", verifyCheckoutSession);

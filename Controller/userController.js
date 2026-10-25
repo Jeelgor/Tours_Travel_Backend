@@ -2,7 +2,7 @@ const Users = require("../models/Users");
 const OTP = require("../models/OtpModel");
 const sendotp = require("../Utility/SendOptMailer");
 const bcrypt = require("bcrypt");
-const { genrateToken } = require("../middleware/authMiddleware ");
+const { genrateToken } = require("../middleware/authMiddleware");
 
 // Register User
 exports.RegisterUser = async (req, res) => {
@@ -14,10 +14,20 @@ exports.RegisterUser = async (req, res) => {
       return res.status(400).json({ msg: "User Already Exists" });
     }
 
-    user = new Users({ FirstName, LastName, Email, Password, SetPassword, Pincode, MobileNumber, Address });
+    user = new Users({
+      FirstName,
+      LastName,
+      Email,
+      Password,
+      SetPassword,
+      Pincode,
+      MobileNumber,
+      Address,
+      role: "user",
+    });
     const response = await user.save();
 
-    const token = genrateToken({ id: response.id, Email: response.Email });
+    const token = genrateToken({ id: response._id, Email: response.Email, role: response.role || "user" });
 
     res.status(200).json({ msg: "User Registered Successfully", response, token });
   } catch (error) {
@@ -41,14 +51,18 @@ exports.LoginUser = async (req, res) => {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    const token = genrateToken({ id: user._id, Email: user.Email });
-
     const otp = Math.floor(100000 + Math.random() * 900000);
+    await OTP.deleteMany({ Email }); // clear old OTPs
     await new OTP({ Email, otp, expiresAt: Date.now() + 300000 }).save();
 
+    console.log(`Generated OTP for ${Email}: ${otp}`);
     sendotp(Email, otp).catch((err) => console.error("OTP email send failed:", err));
 
-    res.status(200).json({ message: "OTP sent to your email. Please verify OTP to complete login.", token });
+    res.status(200).json({
+      message: "OTP sent to your email. Please verify OTP to complete login.",
+      requireOtp: true,
+      Email: user.Email,
+    });
   } catch (error) {
     console.error("Error logging in user:", error);
     res.status(500).json({ message: "Error logging in user", error: error.message });
@@ -66,12 +80,29 @@ exports.verifyOTP = async (req, res) => {
     }
 
     if (otpDoc.expiresAt < Date.now()) {
-      await OTP.deleteOne({ otp, Email });
+      await OTP.deleteOne({ _id: otpDoc._id });
       return res.status(400).json({ message: "OTP expired" });
     }
 
-    await OTP.deleteOne({ otp, Email });
-    res.status(200).json({ message: "OTP verified successfully. Login complete." });
+    const user = await Users.findOne({ Email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await OTP.deleteOne({ _id: otpDoc._id });
+    const token = genrateToken({ id: user._id, Email: user.Email, role: user.role || "user" });
+
+    res.status(200).json({
+      message: "OTP verified successfully. Login complete.",
+      token,
+      user: {
+        id: user._id,
+        Email: user.Email,
+        FirstName: user.FirstName,
+        LastName: user.LastName,
+        role: user.role || "user",
+      },
+    });
   } catch (error) {
     console.error("Error verifying OTP:", error);
     if (!res.headersSent) {
@@ -127,6 +158,7 @@ exports.updateUserProfile = async (req, res) => {
         Address: updatedUser.Address,
         MobileNumber: updatedUser.MobileNumber,
         Pincode: updatedUser.Pincode,
+        role: updatedUser.role || "user",
       },
     });
   } catch (error) {

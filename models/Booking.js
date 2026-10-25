@@ -9,6 +9,7 @@ const BookingSchema = new mongoose.Schema({
   toDate: { type: Date, required: true },
   packageId: {
     type: String,
+    ref: "Tourpackages",
     required: true,
   },
   address: { type: String, required: true },
@@ -16,7 +17,7 @@ const BookingSchema = new mongoose.Schema({
   pincode: { type: String, required: true },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
+    ref: "Users",
     required: true,
   },
   status: {

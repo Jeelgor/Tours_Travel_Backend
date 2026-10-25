@@ -13,8 +13,8 @@ exports.authMiddleware = async (req, res, next) => {
 
   try {
     // Verify the token synchronously
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = { id: decoded.id, Email: decoded.Email };
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "default_jwt_secret_key");
+    req.user = { id: decoded.id, Email: decoded.Email, role: decoded.role || "user" };
     next();
   } catch (err) {
     console.error("Token verification failed:", err);
@@ -23,7 +23,24 @@ exports.authMiddleware = async (req, res, next) => {
   }
 };
 
+// Middleware to verify admin role
+exports.adminMiddleware = (req, res, next) => {
+  if (req.user && req.user.role === "admin") {
+    next();
+  } else {
+    return res.status(403).json({ msg: "Access Denied: Admin Privileges Required" });
+  }
+};
+
 // Function to generate JWT
 exports.genrateToken = (userData) => {
-  return jwt.sign(userData, process.env.JWT_SECRET, { expiresIn: "1d" });
+  return jwt.sign(
+    {
+      id: userData.id,
+      Email: userData.Email,
+      role: userData.role || "user",
+    },
+    process.env.JWT_SECRET || "default_jwt_secret_key",
+    { expiresIn: "1d" }
+  );
 };

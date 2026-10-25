@@ -2,110 +2,12 @@ const Booking = require("../models/Booking");
 const mongoose = require("mongoose");
 const TourPackages = require("../models/TourPackages");
 const User = require("../models/Users");
-const { Tourpackages } = require("../models/TourPackages");
 const stripe = require("stripe")(process.env.STRIP_SECRET_KEY);
-const { getIo } = require("../socket/socket");
 const Payment = require("../models/PaymentModel");
 const { sendBookingUpdate } = require("../realtime/socket");
 
-// Controller to handle booking creation
-// exports.createBooking = async (req, res) => {
-//   try {
-//     const {
-//       packageId,
-//       name,
-//       email,
-//       numberOfTravelers,
-//       specialRequests,
-//       fromDate,
-//       toDate,
-//       address,
-//       mobileNumber,
-//       pincode,
-//     } = req.body;
-
-//     // Get userId from authenticated user
-//     const userId = req.user?.id; 
-
-//     if (!userId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "User authentication required",
-//       });
-//     }
-
-//     // 1️⃣ Atomic seat deduction
-//     // OLD APPROACH (Race Condition): 
-//     // const tour = await TourPackages.findById(packageId);
-//     // if (tour.Seatleft < numberOfTravelers) ...
-//     // tour.Seatleft -= numberOfTravelers; await tour.save();
-//     // Problem: Two requests can read the same Seatleft before either updates it.
-
-//     // NEW APPROACH (Atomic):
-//     // Using findOneAndUpdate with a filter ensures the check and update 
-//     // happen as a single atomic operation in MongoDB.
-//     const updatedTour = await TourPackages.findOneAndUpdate(
-//       { 
-//         _id: packageId, 
-//         Seatleft: { $gte: Number(numberOfTravelers) } 
-//       },
-//       { 
-//         $inc: { Seatleft: -Number(numberOfTravelers) } 
-//       },
-//       { new: true }
-//     );
-
-//     if (!updatedTour) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Not enough seats available or tour not found",
-//       });
-//     }
-
-//     // 2️⃣ Create booking only if seat deduction succeeded
-//     const newBooking = new Booking({
-//       userId,
-//       packageId,
-//       name,
-//       email,
-//       numberOfTravelers,
-//       specialRequests,
-//       fromDate,
-//       toDate,
-//       address,
-//       mobileNumber,
-//       pincode,
-//       status: "pending",
-//       // Note: paymentIntentId is required by schema, would need to be provided here
-//     });
-
-//     await newBooking.save();
-
-//     // Notify via socket
-//     sendBookingUpdate({ Seatleft: updatedTour.Seatleft, packageId: updatedTour._id });
-
-//     res.status(201).json({
-//       success: true,
-//       message: "Booking initiated successfully.",
-//       bookingId: newBooking._id,
-//       Seatleft: updatedTour.Seatleft,
-//     });
-//   } catch (error) {
-//     console.error("Error creating booking:", error);
-
-//     if (!res.headersSent) {
-//       return res.status(500).json({
-//         success: false,
-//         message: "Server error, unable to create booking",
-//         error: error.message,
-//       });
-//     }
-//   }
-// };
-
-exports.cancelExpiredBookings = async () => {
-  const now = new Date();
-
+// Background task to cancel expired pending/cancelled bookings
+exports.cancelExpiredBookings = async (req, res) => {
   try {
     const expiredBookings = await Booking.find({
       status: { $in: ["pending", "cancelled"] },
@@ -113,56 +15,44 @@ exports.cancelExpiredBookings = async () => {
     });
 
     if (expiredBookings.length === 0) {
-      console.log("No expired bookings found.");
+      if (res) return res.status(200).json({ message: "No expired bookings found" });
       return;
     }
-    console.log("Expired Bookings:", expiredBookings.length);
-    console.log(
-      "Expired Booking IDs:",
-      expiredBookings.map((b) => b.packageId)
-    );
 
     await Promise.all(
       expiredBookings.map(async (booking) => {
-        console.log("Processing Booking:", booking);
+        if (!booking.packageId) return;
 
-        if (!booking.packageId) {
-          console.log(
-            `⛔ ERROR: packageId is missing for booking ${booking.packageId}`
-          );
-          return;
-        }
-
-        // ✅ Restore seats atomically using $inc
+        // Restore seats
         const updatedTour = await TourPackages.findByIdAndUpdate(
           booking.packageId,
           { $inc: { Seatleft: booking.numberOfTravelers } },
           { new: true }
         );
 
-        if (!updatedTour) {
-          console.log(
-            `⛔ ERROR: Tour package not found for packageId ${booking.packageId}`
-          );
-          return;
+        if (updatedTour) {
+          sendBookingUpdate({ Seatleft: updatedTour.Seatleft, packageId: updatedTour._id });
         }
 
-        console.log(`✅ Seats restored. New count: ${updatedTour.Seatleft}`);
-
-        // ✅ Delete the booking properly
+        // Delete expired booking
         await Booking.deleteOne({ _id: booking._id });
-
-        console.log(`✅ Booking ${booking._id} canceled and seats restored.`);
       })
     );
 
-    console.log("✅ All expired bookings processed successfully.");
+    if (res) {
+      return res.status(200).json({
+        message: `Processed ${expiredBookings.length} expired bookings`,
+      });
+    }
   } catch (error) {
     console.error("Error canceling expired bookings:", error);
+    if (res) {
+      return res.status(500).json({ message: "Error canceling expired bookings", error: error.message });
+    }
   }
 };
 
-// confirm-booking
+// Create Stripe Checkout Session
 exports.createCheckoutSession = async (req, res) => {
   try {
     const {
@@ -178,33 +68,33 @@ exports.createCheckoutSession = async (req, res) => {
       specialRequests,
     } = req.body;
 
-    // 1️⃣ Check for availability (ReadOnly check)
-    // We don't decrement here anymore to avoid double-counting with the webhook/verify calls.
     const tour = await TourPackages.findById(packageId);
-    
+
     if (!tour) {
       return res.status(404).json({ error: "Tour not found" });
     }
 
     if (tour.Seatleft < Number(numberOfTravelers)) {
-      return res.status(400).json({ 
-        error: `Only ${tour.Seatleft} seats available` 
+      return res.status(400).json({
+        error: `Only ${tour.Seatleft} seats available`,
       });
     }
 
-    // Clean price: remove commas and convert to paise
-    const cleanPrice = Number(tour.price.replace(/,/g, ""));
-    const amountInPaise = cleanPrice * 100;
+    // Clean price
+    const cleanPrice = Number(String(tour.price).replace(/,/g, ""));
+    const amountInPaise = Math.round(cleanPrice * 100);
+
+    const clientUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || "http://localhost:5173";
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
         {
           price_data: {
-            currency: "inr",
+            currency: (tour.currency === "₹" || tour.currency === "INR") ? "inr" : "usd",
             product_data: {
               name: tour.title,
-              description: tour.highlights.join(", "),
+              description: Array.isArray(tour.highlights) ? tour.highlights.join(", ") : tour.title,
             },
             unit_amount: amountInPaise,
           },
@@ -212,16 +102,16 @@ exports.createCheckoutSession = async (req, res) => {
         },
       ],
       mode: "payment",
-      success_url: `${process.env.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.CLIENT_URL}/payment-cancel`,
+      success_url: `${clientUrl.replace(/\/+$/, "")}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${clientUrl.replace(/\/+$/, "")}/payment-cancel`,
       metadata: {
-        userId: req.user.id,
+        userId: req.user ? req.user.id : "",
         packageId: tour._id.toString(),
         name,
         email,
-        numberOfTravelers,
-        fromDate,
-        toDate,
+        numberOfTravelers: String(numberOfTravelers),
+        fromDate: String(fromDate),
+        toDate: String(toDate),
         address,
         mobileNumber,
         pincode,
@@ -231,25 +121,26 @@ exports.createCheckoutSession = async (req, res) => {
 
     res.status(200).json({ sessionId: session.id });
   } catch (err) {
-    console.log(err);
+    console.error("Stripe session creation error:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
-// Get all bookings
+// Get bookings (Admins get all, regular users get only their own)
 exports.getBookings = async (req, res) => {
   try {
-    const bookings = await Booking.find().populate(
+    const filter = req.user && req.user.role === "admin" ? {} : { userId: req.user?.id };
+    const bookings = await Booking.find(filter).populate(
       "packageId",
       "title location price"
-    ); // Populate package details
+    );
 
     return res.status(200).json({
       success: true,
       data: bookings,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching bookings:", error);
     return res.status(500).json({
       success: false,
       message: "Server error, unable to fetch bookings",
@@ -257,7 +148,7 @@ exports.getBookings = async (req, res) => {
   }
 };
 
-// Get a single booking by ID
+// Get single booking by ID
 exports.getBookingById = async (req, res) => {
   const { bookingId } = req.params;
 
@@ -269,7 +160,11 @@ exports.getBookingById = async (req, res) => {
   }
 
   try {
-    const booking = await Booking.findById(bookingId).populate(
+    const filter = req.user && req.user.role === "admin"
+      ? { _id: bookingId }
+      : { _id: bookingId, userId: req.user?.id };
+
+    const booking = await Booking.findOne(filter).populate(
       "packageId",
       "title location price"
     );
@@ -286,7 +181,7 @@ exports.getBookingById = async (req, res) => {
       data: booking,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching booking by ID:", error);
     return res.status(500).json({
       success: false,
       message: "Server error, unable to fetch booking",
@@ -294,7 +189,7 @@ exports.getBookingById = async (req, res) => {
   }
 };
 
-// Update booking details (e.g., after payment)
+// Update booking
 exports.updateBooking = async (req, res) => {
   const { bookingId } = req.params;
 
@@ -306,8 +201,12 @@ exports.updateBooking = async (req, res) => {
   }
 
   try {
-    const updatedBooking = await Booking.findByIdAndUpdate(
-      bookingId,
+    const filter = req.user && req.user.role === "admin"
+      ? { _id: bookingId }
+      : { _id: bookingId, userId: req.user?.id };
+
+    const updatedBooking = await Booking.findOneAndUpdate(
+      filter,
       req.body,
       { new: true }
     );
@@ -315,7 +214,7 @@ exports.updateBooking = async (req, res) => {
     if (!updatedBooking) {
       return res.status(404).json({
         success: false,
-        message: "Booking not found",
+        message: "Booking not found or unauthorized",
       });
     }
 
@@ -325,7 +224,7 @@ exports.updateBooking = async (req, res) => {
       data: updatedBooking,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error updating booking:", error);
     return res.status(500).json({
       success: false,
       message: "Server error, unable to update booking",
@@ -345,12 +244,16 @@ exports.deleteBooking = async (req, res) => {
   }
 
   try {
-    const deletedBooking = await Booking.findByIdAndDelete(bookingId);
+    const filter = req.user && req.user.role === "admin"
+      ? { _id: bookingId }
+      : { _id: bookingId, userId: req.user?.id };
+
+    const deletedBooking = await Booking.findOneAndDelete(filter);
 
     if (!deletedBooking) {
       return res.status(404).json({
         success: false,
-        message: "Booking not found",
+        message: "Booking not found or unauthorized",
       });
     }
 
@@ -359,7 +262,7 @@ exports.deleteBooking = async (req, res) => {
       message: "Booking deleted successfully",
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error deleting booking:", error);
     return res.status(500).json({
       success: false,
       message: "Server error, unable to delete booking",
@@ -373,41 +276,48 @@ exports.CancleBooking = async (req, res) => {
     const { bookingId } = req.body;
     const userId = req.user?.id;
 
-    const booking = await Booking.findOne({ _id: bookingId, userId });
+    const filter = req.user?.role === "admin"
+      ? { _id: bookingId }
+      : { _id: bookingId, userId };
+
+    const booking = await Booking.findOne(filter);
     if (!booking) return res.status(404).json({ message: "Booking not found" });
 
-    if (booking.status === "cancelled")
-      return res.status(400).json({ message: "Booking is already cancelled" });
+    if (booking.status === "cancelled" || booking.status === "refunded")
+      return res.status(400).json({ message: "Booking is already cancelled or refunded" });
 
-    // ✅ Update status
     booking.status = "cancelled";
     await booking.save();
 
-    // ✅ Restore seats
-    await TourPackages.findByIdAndUpdate(
+    // Restore seats
+    const updatedTour = await TourPackages.findByIdAndUpdate(
       booking.packageId,
       { $inc: { Seatleft: Number(booking.numberOfTravelers) } },
       { new: true }
     );
 
-    // ✅ Refund using saved paymentIntentId
-    if (!booking.paymentIntentId)
-      return res.status(400).json({ message: "No paymentIntentId found" });
+    if (updatedTour) {
+      sendBookingUpdate({ Seatleft: updatedTour.Seatleft, packageId: updatedTour._id });
+    }
 
-    await stripe.refunds.create({
-      payment_intent: booking.paymentIntentId,
-    });
-    booking.status = "refunded";
+    // Refund if paymentIntentId exists
+    if (booking.paymentIntentId) {
+      try {
+        await stripe.refunds.create({
+          payment_intent: booking.paymentIntentId,
+        });
+        booking.status = "refunded";
+        await booking.save();
+      } catch (refundErr) {
+        console.error("Stripe refund error:", refundErr);
+      }
+    }
 
-    console.log(
-      `✅ Booking ${bookingId} cancelled. Restored ${booking.numberOfTravelers} seats.`
-    );
-
-    return res
-      .status(200)
-      .json({ message: "Booking cancelled and refunded successfully" });
+    return res.status(200).json({ message: "Booking cancelled and processed successfully" });
   } catch (error) {
-    console.error("❌ Error cancelling booking:", error);
+    console.error("Error cancelling booking:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+exports.cancelBooking = exports.CancleBooking;

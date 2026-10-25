@@ -1,34 +1,26 @@
 const express = require("express");
 const router = express.Router();
 const BookingController = require("../Controller/BookingController");
-const { authMiddleware } = require("../middleware/authMiddleware ");
+const { authMiddleware } = require("../middleware/authMiddleware");
 
-// Create a new booking
-// router.post("/book", authMiddleware, BookingController.createBooking);
-
-// Get all bookings
-router.get("/bookings", BookingController.getBookings);
+// Get bookings (filtered by user, or all if admin)
+router.get("/bookings", authMiddleware, BookingController.getBookings);
 
 // Get a booking by ID
-router.get("/booking/:bookingId", BookingController.getBookingById);
+router.get("/booking/:bookingId", authMiddleware, BookingController.getBookingById);
 
-// Update a booking by ID (e.g., after payment)
-router.put("/booking/:bookingId", BookingController.updateBooking);
+// Update a booking by ID
+router.put("/booking/:bookingId", authMiddleware, BookingController.updateBooking);
 
 // Delete a booking by ID
-router.delete("/booking/:bookingId", BookingController.deleteBooking);
+router.delete("/booking/:bookingId", authMiddleware, BookingController.deleteBooking);
 
-//
+// Cancel Booking
 router.post("/CancleBooking", authMiddleware, BookingController.CancleBooking);
+router.post("/cancelBooking", authMiddleware, BookingController.CancleBooking);
 
-// router.post(
-//   "/confirm-booking",
-//   authMiddleware,
-//   BookingController.ConfirmBooking
-// );
-router.post(
-  "/api/cancel-expired-bookings",
-  BookingController.cancelExpiredBookings
-);
+// Cancel expired bookings (support standard and legacy path)
+router.post("/cancel-expired-bookings", BookingController.cancelExpiredBookings);
+router.post("/api/cancel-expired-bookings", BookingController.cancelExpiredBookings);
 
 module.exports = router;
