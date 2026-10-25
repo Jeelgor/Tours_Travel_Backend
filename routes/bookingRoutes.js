@@ -23,4 +23,8 @@ router.post("/cancelBooking", authMiddleware, BookingController.CancleBooking);
 router.post("/cancel-expired-bookings", BookingController.cancelExpiredBookings);
 router.post("/api/cancel-expired-bookings", BookingController.cancelExpiredBookings);
 
+// Vercel Cron endpoint
+router.get("/cron", BookingController.cancelExpiredBookings);
+router.post("/cron", BookingController.cancelExpiredBookings);
+
 module.exports = router;
