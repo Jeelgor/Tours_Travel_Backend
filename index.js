@@ -20,27 +20,44 @@ const app = express();
 // Connect to MongoDB
 connectMongoose();
 
-// Start background cron jobs (e.g. seat restoration for expired bookings)
-startCronJobs();
+// Start background cron jobs only in persistent environments (not serverless)
+if (!process.env.VERCEL) {
+  startCronJobs();
+}
 
-// CORS Middleware
-app.use(
-  cors({
-    origin: [
-      "https://tours-travel-one.vercel.app",
-      "http://localhost:5173",
-      "https://tours-travel-backend-five.vercel.app",
-      "http://localhost:3000",
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "Accept"],
-    exposedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+// Robust CORS Middleware supporting local & Vercel deployment origins
+const allowedOrigins = [
+  "https://tours-travel-one.vercel.app",
+  "https://tours-travel-backend-five.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
 
-// Explicitly handle preflight for all routes
-app.options("*", cors());
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin) || origin.endsWith(".vercel.app")) {
+      return callback(null, true);
+    }
+    return callback(new Error("Not allowed by CORS: " + origin));
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  credentials: true,
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "Accept",
+    "X-Requested-With",
+    "Origin",
+    "Access-Control-Request-Method",
+    "Access-Control-Request-Headers",
+  ],
+  exposedHeaders: ["Content-Type", "Authorization"],
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // Middleware to parse JSON while retaining raw buffer for Stripe Webhook
 app.use(
@@ -56,6 +73,11 @@ app.use(
 // Static uploads folder
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
+});
+
 // Routes
 app.use("/Auth/users", userRoutes);
 app.use("/api/payment", paymentRoutes);
@@ -70,8 +92,8 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ message: err.message || "Something went wrong!" });
 });
 
-// Start server
-if (process.env.NODE_ENV !== "test") {
+// Start server locally (skip inside Vercel serverless functions)
+if (process.env.NODE_ENV !== "test" && !process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log("Server is listening on PORT", PORT);
   });
