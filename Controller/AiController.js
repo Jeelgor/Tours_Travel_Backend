@@ -15,18 +15,19 @@ const fetchTourData = async (req, res) => {
 
 const askTourAI = async (req, res) => {
   try {
-    const { query } = req.body;
+    const { query, history } = req.body;
 
-    if (!query) {
+    if (!query || !query.trim()) {
       return res.status(400).json({ message: "Query is required" });
     }
 
-    const result = await ragSearch(query);
+    const result = await ragSearch(query.trim(), history || []);
 
     res.status(200).json({
       success: true,
       answer: result.answer,
-      sources: result.sources,
+      recommendedTours: result.recommendedTours || [],
+      sources: result.sources || [],
     });
   } catch (error) {
     console.error("AI Ask Error:", error);
