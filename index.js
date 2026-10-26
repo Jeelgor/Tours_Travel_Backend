@@ -78,6 +78,20 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
+// Middleware to ensure DB connection is ready before handling requests
+app.use(async (req, res, next) => {
+  try {
+    await connectMongoose();
+    next();
+  } catch (err) {
+    console.error("Database connection failure:", err.message);
+    return res.status(503).json({
+      message: "Database connection temporarily unavailable. Please verify MongoDB Atlas IP whitelist (allow 0.0.0.0/0).",
+      error: err.message,
+    });
+  }
+});
+
 // Routes
 app.use("/Auth/users", userRoutes);
 app.use("/api/payment", paymentRoutes);
