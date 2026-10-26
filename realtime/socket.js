@@ -1,25 +1,29 @@
-let ioInstance;
+const { supabase } = require("../config/supabase");
 
-const setupSocket = (io) => {
-  ioInstance = io;
+/**
+ * Broadcast real-time seat update to all connected clients via Supabase Realtime
+ * @param {Object} booking - { Seatleft, packageId }
+ */
+const sendBookingUpdate = async (booking) => {
+  try {
+    if (!supabase) {
+      console.warn("Supabase client not available for realtime broadcast.");
+      return;
+    }
 
-  io.on("connection", (socket) => {
-    console.log("Client connected:", socket.id);
-
-    socket.on("disconnect", () => {
-      console.log("Client disconnected:", socket.id);
+    const channel = supabase.channel("tour-seat-updates");
+    await channel.send({
+      type: "broadcast",
+      event: "bookingConfirmed",
+      payload: booking,
     });
-  });
-};
 
-const sendBookingUpdate = (booking) => {
-  console.log(booking, "from socket");
-  if (ioInstance) {
-    ioInstance.emit("bookingConfirmed", booking);
+    console.log("📡 Supabase Realtime broadcast sent successfully:", booking);
+  } catch (error) {
+    console.error("❌ Failed to broadcast seat update via Supabase:", error);
   }
 };
 
 module.exports = {
-  setupSocket,
   sendBookingUpdate,
-};  
+};

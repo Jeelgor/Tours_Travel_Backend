@@ -1,8 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const http = require("http");
 const path = require("path");
-const socketIo = require("socket.io");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const userRoutes = require("./routes/UserRoutes");
@@ -12,33 +10,15 @@ const AdminRoutes = require("./routes/AdminRoutes");
 const aiRoutes = require("./routes/ai.routes");
 const stripeRoutes = require("./routes/stripe");
 
-// Import DB, socket setup & background jobs
+// Import DB & background jobs
 const connectMongoose = require("./config/database");
-const { setupSocket } = require("./realtime/socket");
 const { startCronJobs } = require("./Utility/cronJobs");
 
 const PORT = process.env.PORT || 3000;
 const app = express();
-const server = http.createServer(app);
-
-const io = socketIo(server, {
-  cors: {
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "https://tours-travel-one.vercel.app",
-      "https://tours-travel-backend-five.vercel.app",
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: true,
-  },
-});
 
 // Connect to MongoDB
 connectMongoose();
-
-// Initialize sockets
-setupSocket(io);
 
 // Start background cron jobs (e.g. seat restoration for expired bookings)
 startCronJobs();
@@ -91,8 +71,10 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-server.listen(PORT, () => {
-  console.log("Server is listening on PORT", PORT);
-});
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, () => {
+    console.log("Server is listening on PORT", PORT);
+  });
+}
 
 module.exports = app;
