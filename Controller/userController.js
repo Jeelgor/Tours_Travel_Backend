@@ -56,10 +56,21 @@ exports.LoginUser = async (req, res) => {
     await new OTP({ Email, otp, expiresAt: Date.now() + 300000 }).save();
 
     console.log(`Generated OTP for ${Email}: ${otp}`);
-    sendotp(Email, otp).catch((err) => console.error("OTP email send failed:", err));
+
+    // Must await sendotp in serverless to prevent Vercel from freezing before email is delivered
+    try {
+      await sendotp(Email, otp);
+      console.log(`OTP successfully emailed to ${Email}`);
+    } catch (emailError) {
+      console.error("OTP email delivery error:", emailError.message);
+      return res.status(500).json({
+        message: "Failed to deliver OTP email. Please ensure your email is valid and GOOGLE_PASS is configured in Vercel.",
+        error: emailError.message,
+      });
+    }
 
     res.status(200).json({
-      message: "OTP sent to your email. Please verify OTP to complete login.",
+      message: "OTP sent to your email. Please check your Inbox (and Spam/Junk folder) to complete login.",
       requireOtp: true,
       Email: user.Email,
     });
